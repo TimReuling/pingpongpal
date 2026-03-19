@@ -2,87 +2,97 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@700&display=swap');
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 220 20% 97%;
+    --foreground: 220 25% 10%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 220 25% 10%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 220 25% 10%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 145 72% 40%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 220 15% 92%;
+    --secondary-foreground: 220 25% 10%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 220 15% 94%;
+    --muted-foreground: 220 10% 46%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 30 95% 55%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --border: 220 15% 88%;
+    --input: 220 15% 88%;
+    --ring: 145 72% 40%;
 
-    --radius: 0.5rem;
+    --radius: 1rem;
+
+    /* Custom tokens */
+    --table-green: 145 72% 40%;
+    --table-green-light: 145 60% 50%;
+    --table-green-dark: 145 80% 25%;
+    --table-blue: 210 90% 50%;
+    --player-top: 145 70% 32%;
+    --player-bottom: 160 65% 28%;
+    --score-glow: 145 80% 55%;
+    --service-indicator: 30 95% 55%;
+    --win-gold: 45 100% 55%;
 
     --sidebar-background: 0 0% 98%;
-
     --sidebar-foreground: 240 5.3% 26.1%;
-
     --sidebar-primary: 240 5.9% 10%;
-
     --sidebar-primary-foreground: 0 0% 98%;
-
     --sidebar-accent: 240 4.8% 95.9%;
-
     --sidebar-accent-foreground: 240 5.9% 10%;
-
     --sidebar-border: 220 13% 91%;
-
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    --background: 220 25% 8%;
+    --foreground: 220 15% 95%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: 220 25% 12%;
+    --card-foreground: 220 15% 95%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 220 25% 12%;
+    --popover-foreground: 220 15% 95%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 145 72% 45%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 220 20% 18%;
+    --secondary-foreground: 220 15% 95%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 220 20% 16%;
+    --muted-foreground: 220 10% 55%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 30 95% 55%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    --border: 220 20% 20%;
+    --input: 220 20% 20%;
+    --ring: 145 72% 45%;
+
+    --table-green: 145 65% 35%;
+    --table-green-light: 145 55% 42%;
+    --table-green-dark: 145 75% 18%;
+    --player-top: 145 65% 28%;
+    --player-bottom: 160 60% 24%;
+    --score-glow: 145 75% 45%;
+
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
     --sidebar-primary: 224.3 76.3% 48%;
@@ -100,6 +110,73 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
+    font-family: 'Outfit', sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+}
+
+@layer utilities {
+  .score-font {
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .table-surface {
+    background: linear-gradient(180deg, hsl(var(--player-top)) 0%, hsl(var(--player-top)) 48%, hsl(0 0% 100% / 0.9) 49%, hsl(0 0% 100% / 0.9) 51%, hsl(var(--player-bottom)) 52%, hsl(var(--player-bottom)) 100%);
+  }
+
+  .player-section-top {
+    background: linear-gradient(180deg, hsl(var(--player-top)) 0%, hsl(var(--table-green-light) / 0.3) 100%);
+  }
+
+  .player-section-bottom {
+    background: linear-gradient(0deg, hsl(var(--player-bottom)) 0%, hsl(var(--table-green-light) / 0.3) 100%);
+  }
+
+  .active-glow {
+    box-shadow: inset 0 0 60px hsl(var(--score-glow) / 0.15), 0 0 30px hsl(var(--score-glow) / 0.1);
+  }
+
+  .service-dot {
+    @apply w-3 h-3 rounded-full;
+    background: hsl(var(--service-indicator));
+    box-shadow: 0 0 8px hsl(var(--service-indicator) / 0.6);
+    animation: pulse-service 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse-service {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.2); }
+  }
+
+  .score-btn {
+    @apply flex items-center justify-center rounded-2xl font-bold text-2xl transition-all duration-150 active:scale-95;
+    min-height: 64px;
+    min-width: 64px;
+  }
+
+  .score-btn-plus {
+    background: hsl(0 0% 100% / 0.2);
+    color: hsl(0 0% 100%);
+    backdrop-filter: blur(8px);
+    border: 2px solid hsl(0 0% 100% / 0.3);
+  }
+
+  .score-btn-plus:active {
+    background: hsl(0 0% 100% / 0.35);
+  }
+
+  .score-btn-minus {
+    background: hsl(0 0% 0% / 0.15);
+    color: hsl(0 0% 100% / 0.7);
+    backdrop-filter: blur(8px);
+    border: 2px solid hsl(0 0% 100% / 0.1);
+  }
+
+  .score-btn-minus:active {
+    background: hsl(0 0% 0% / 0.25);
   }
 }
