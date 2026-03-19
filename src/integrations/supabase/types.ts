@@ -14,7 +14,147 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      matches: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          id: string
+          player1_id: string
+          player1_score: number
+          player2_id: string
+          player2_score: number
+          status: string
+          target_score: number
+          winner_id: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          player1_id: string
+          player1_score?: number
+          player2_id: string
+          player2_score?: number
+          status?: string
+          target_score?: number
+          winner_id?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          player1_id?: string
+          player1_score?: number
+          player2_id?: string
+          player2_score?: number
+          status?: string
+          target_score?: number
+          winner_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "matches_player1_id_fkey"
+            columns: ["player1_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matches_player2_id_fkey"
+            columns: ["player2_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matches_winner_id_fkey"
+            columns: ["winner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      player_stats: {
+        Row: {
+          best_win_streak: number
+          current_win_streak: number
+          id: string
+          matches_lost: number
+          matches_played: number
+          matches_won: number
+          profile_id: string
+          total_points_conceded: number
+          total_points_scored: number
+          updated_at: string
+        }
+        Insert: {
+          best_win_streak?: number
+          current_win_streak?: number
+          id?: string
+          matches_lost?: number
+          matches_played?: number
+          matches_won?: number
+          profile_id: string
+          total_points_conceded?: number
+          total_points_scored?: number
+          updated_at?: string
+        }
+        Update: {
+          best_win_streak?: number
+          current_win_streak?: number
+          id?: string
+          matches_lost?: number
+          matches_played?: number
+          matches_won?: number
+          profile_id?: string
+          total_points_conceded?: number
+          total_points_scored?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "player_stats_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          created_by: string | null
+          display_name: string
+          id: string
+          is_guest: boolean
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          display_name: string
+          id?: string
+          is_guest?: boolean
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          display_name?: string
+          id?: string
+          is_guest?: boolean
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
