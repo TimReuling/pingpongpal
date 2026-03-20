@@ -12,8 +12,9 @@ interface WinnerModalProps {
   soundEnabled?: boolean;
 }
 
-export default function WinnerModal({ winnerName, score, onPlayAgain, onNewOpponent, lang }: WinnerModalProps) {
+export default function WinnerModal({ winnerName, score, onPlayAgain, onNewOpponent, lang, soundEnabled = true }: WinnerModalProps) {
   useEffect(() => {
+    if (soundEnabled) playWin();
     // Fire confetti
     const duration = 2000;
     const end = Date.now() + duration;

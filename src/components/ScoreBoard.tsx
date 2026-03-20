@@ -119,7 +119,17 @@ export default function ScoreBoard({
   const handleScore = useCallback((player: 1 | 2, delta: 1 | -1) => {
     setMatchState(prev => {
       if (prev.isComplete && delta === 1) return prev;
+      const prevServer = prev.server;
       const newState = updateScore(prev, player, delta, firstServer);
+
+      // Sound effects
+      if (soundEnabled) {
+        if (delta === 1) playScoreUp();
+        else playScoreDown();
+        if (newState.server !== prevServer && !newState.isComplete) {
+          setTimeout(() => soundEnabled && playServiceChange(), 150);
+        }
+      }
 
       // Trigger animation
       if (delta === 1) {
@@ -141,7 +151,7 @@ export default function ScoreBoard({
 
       return newState;
     });
-  }, [firstServer, saveScore, updateStats, onMatchComplete]);
+  }, [firstServer, saveScore, updateStats, onMatchComplete, soundEnabled]);
 
   const handlePlayAgain = () => {
     setShowWinner(false);
