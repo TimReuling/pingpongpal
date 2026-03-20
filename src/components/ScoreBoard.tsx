@@ -18,7 +18,7 @@ interface ScoreBoardProps {
 }
 
 export default function ScoreBoard({
-  player1, player2, targetScore, lang, onNavigate, onNewMatch, onMatchComplete
+  player1, player2, targetScore, lang, onNavigate, onNewMatch, onMatchComplete, soundEnabled
 }: ScoreBoardProps) {
   const [matchState, setMatchState] = useState<MatchState>(() => getInitialMatchState(targetScore));
   const [firstServer] = useState<1 | 2>(1);
