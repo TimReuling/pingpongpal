@@ -9,6 +9,7 @@ interface WinnerModalProps {
   onPlayAgain: () => void;
   onNewOpponent: () => void;
   lang: Lang;
+  soundEnabled?: boolean;
 }
 
 export default function WinnerModal({ winnerName, score, onPlayAgain, onNewOpponent, lang }: WinnerModalProps) {
