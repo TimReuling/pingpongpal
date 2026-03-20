@@ -160,6 +160,13 @@
     animation: pulse-service 2s ease-in-out infinite;
   }
 
+  .service-dot-large {
+    @apply w-5 h-5 rounded-full;
+    background: hsl(var(--service-indicator));
+    box-shadow: 0 0 16px hsl(var(--service-indicator) / 0.8), 0 0 32px hsl(var(--service-indicator) / 0.4);
+    animation: pulse-service 2s ease-in-out infinite;
+  }
+
   @keyframes pulse-service {
     0%, 100% { opacity: 1; transform: scale(1); }
     50% { opacity: 0.7; transform: scale(1.2); }
