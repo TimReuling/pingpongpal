@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import confetti from 'canvas-confetti';
+import { playWin } from '@/lib/sounds';
 import { t, type Lang } from '@/lib/i18n';
 
 interface WinnerModalProps {
@@ -8,10 +9,12 @@ interface WinnerModalProps {
   onPlayAgain: () => void;
   onNewOpponent: () => void;
   lang: Lang;
+  soundEnabled?: boolean;
 }
 
-export default function WinnerModal({ winnerName, score, onPlayAgain, onNewOpponent, lang }: WinnerModalProps) {
+export default function WinnerModal({ winnerName, score, onPlayAgain, onNewOpponent, lang, soundEnabled = true }: WinnerModalProps) {
   useEffect(() => {
+    if (soundEnabled) playWin();
     // Fire confetti
     const duration = 2000;
     const end = Date.now() + duration;

@@ -68,6 +68,7 @@ export default function Index() {
         player2={opponent}
         targetScore={settings.targetScore}
         lang={settings.language}
+        soundEnabled={settings.soundEnabled}
         onNavigate={setPage}
         onNewMatch={handleNewMatch}
         onMatchComplete={() => {}}

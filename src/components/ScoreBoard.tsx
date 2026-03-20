@@ -3,6 +3,7 @@ import type { Tables } from '@/integrations/supabase/types';
 import { t, type Lang } from '@/lib/i18n';
 import { getInitialMatchState, updateScore, type MatchState } from '@/lib/scoring';
 import { supabase } from '@/integrations/supabase/client';
+import { playScoreUp, playScoreDown, playServiceChange } from '@/lib/sounds';
 import WinnerModal from './WinnerModal';
 
 interface ScoreBoardProps {
@@ -13,10 +14,11 @@ interface ScoreBoardProps {
   onNavigate: (page: 'stats' | 'settings') => void;
   onNewMatch: () => void;
   onMatchComplete: () => void;
+  soundEnabled: boolean;
 }
 
 export default function ScoreBoard({
-  player1, player2, targetScore, lang, onNavigate, onNewMatch, onMatchComplete
+  player1, player2, targetScore, lang, onNavigate, onNewMatch, onMatchComplete, soundEnabled
 }: ScoreBoardProps) {
   const [matchState, setMatchState] = useState<MatchState>(() => getInitialMatchState(targetScore));
   const [firstServer] = useState<1 | 2>(1);
@@ -117,7 +119,17 @@ export default function ScoreBoard({
   const handleScore = useCallback((player: 1 | 2, delta: 1 | -1) => {
     setMatchState(prev => {
       if (prev.isComplete && delta === 1) return prev;
+      const prevServer = prev.server;
       const newState = updateScore(prev, player, delta, firstServer);
+
+      // Sound effects
+      if (soundEnabled) {
+        if (delta === 1) playScoreUp();
+        else playScoreDown();
+        if (newState.server !== prevServer && !newState.isComplete) {
+          setTimeout(() => soundEnabled && playServiceChange(), 150);
+        }
+      }
 
       // Trigger animation
       if (delta === 1) {
@@ -139,7 +151,7 @@ export default function ScoreBoard({
 
       return newState;
     });
-  }, [firstServer, saveScore, updateStats, onMatchComplete]);
+  }, [firstServer, saveScore, updateStats, onMatchComplete, soundEnabled]);
 
   const handlePlayAgain = () => {
     setShowWinner(false);
@@ -227,6 +239,7 @@ export default function ScoreBoard({
           onPlayAgain={handlePlayAgain}
           onNewOpponent={handleNewOpponent}
           lang={lang}
+          soundEnabled={soundEnabled}
         />
       )}
     </>
