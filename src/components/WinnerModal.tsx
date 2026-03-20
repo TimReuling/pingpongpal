@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import confetti from 'canvas-confetti';
+import { playWin } from '@/lib/sounds';
 import { t, type Lang } from '@/lib/i18n';
 
 interface WinnerModalProps {
