@@ -3,6 +3,7 @@ import type { Tables } from '@/integrations/supabase/types';
 import { t, type Lang } from '@/lib/i18n';
 import { getInitialMatchState, updateScore, type MatchState } from '@/lib/scoring';
 import { supabase } from '@/integrations/supabase/client';
+import { playScoreUp, playScoreDown, playServiceChange } from '@/lib/sounds';
 import WinnerModal from './WinnerModal';
 
 interface ScoreBoardProps {
