@@ -239,6 +239,7 @@ export default function ScoreBoard({
           onPlayAgain={handlePlayAgain}
           onNewOpponent={handleNewOpponent}
           lang={lang}
+          soundEnabled={soundEnabled}
         />
       )}
     </>
