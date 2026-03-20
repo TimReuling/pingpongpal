@@ -14,6 +14,7 @@ interface ScoreBoardProps {
   onNavigate: (page: 'stats' | 'settings') => void;
   onNewMatch: () => void;
   onMatchComplete: () => void;
+  soundEnabled: boolean;
 }
 
 export default function ScoreBoard({
