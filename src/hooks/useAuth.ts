@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { User } from '@supabase/supabase-js';
 import type { Tables } from '@/integrations/supabase/types';
@@ -12,7 +12,6 @@ export function useAuth() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setUser(session?.user ?? null);
       if (session?.user) {
-        // Small delay to allow trigger to create profile
         setTimeout(async () => {
           const { data } = await supabase
             .from('profiles')
@@ -52,5 +51,5 @@ export function useAuth() {
     await supabase.auth.signOut();
   };
 
-  return { user, profile, loading, signOut };
+  return { user, profile, loading, signOut, setProfile };
 }

@@ -14,7 +14,7 @@ export default function StatsPage({ lang, onBack }: StatsPageProps) {
   return (
     <div className="flex min-h-dvh flex-col bg-background">
       {/* Header */}
-      <div className="flex items-center gap-3 bg-table-green-dark px-4 py-5">
+      <div className="safe-top flex items-center gap-3 bg-table-green-dark px-4 py-5">
         <button onClick={onBack} className="rounded-xl bg-primary-foreground/10 px-3 py-2 text-primary-foreground font-semibold active:scale-95">
           ← {t('back', lang)}
         </button>

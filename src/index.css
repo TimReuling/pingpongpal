@@ -116,6 +116,19 @@
     overscroll-behavior: none;
     user-select: none;
     -webkit-user-select: none;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+@layer utilities {
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
   }
 }
 
@@ -144,6 +157,13 @@
     @apply w-3 h-3 rounded-full;
     background: hsl(var(--service-indicator));
     box-shadow: 0 0 8px hsl(var(--service-indicator) / 0.6);
+    animation: pulse-service 2s ease-in-out infinite;
+  }
+
+  .service-dot-large {
+    @apply w-5 h-5 rounded-full;
+    background: hsl(var(--service-indicator));
+    box-shadow: 0 0 16px hsl(var(--service-indicator) / 0.8), 0 0 32px hsl(var(--service-indicator) / 0.4);
     animation: pulse-service 2s ease-in-out infinite;
   }
 

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import type { Tables } from '@/integrations/supabase/types';
 import { t, type Lang } from '@/lib/i18n';
+import type { MatchRequest } from '@/hooks/useMatchRequests';
+import MatchRequestNotification from './MatchRequestNotification';
 
 interface OpponentSelectProps {
   players: Tables<'profiles'>[];
@@ -8,9 +10,19 @@ interface OpponentSelectProps {
   onSelect: (player: Tables<'profiles'>) => void;
   onAddGuest: (name: string) => Promise<Tables<'profiles'> | null>;
   lang: Lang;
+  onNavigate: (page: string) => void;
+  incomingRequests: MatchRequest[];
+  onAcceptRequest: (request: MatchRequest) => void;
+  onDeclineRequest: (requestId: string) => void;
+  onSendChallenge: (player: Tables<'profiles'>) => void;
+  currentProfile: Tables<'profiles'> | null;
 }
 
-export default function OpponentSelect({ players, currentProfileId, onSelect, onAddGuest, lang }: OpponentSelectProps) {
+export default function OpponentSelect({
+  players, currentProfileId, onSelect, onAddGuest, lang,
+  onNavigate, incomingRequests, onAcceptRequest, onDeclineRequest,
+  onSendChallenge, currentProfile,
+}: OpponentSelectProps) {
   const [guestName, setGuestName] = useState('');
   const [showGuestInput, setShowGuestInput] = useState(false);
 
@@ -27,41 +39,99 @@ export default function OpponentSelect({ players, currentProfileId, onSelect, on
   return (
     <div className="flex min-h-dvh flex-col bg-background">
       {/* Header */}
-      <div className="flex items-center justify-center bg-table-green-dark px-4 py-6">
+      <div className="safe-top flex items-center justify-between bg-table-green-dark px-4 py-6">
         <h1 className="text-2xl font-bold text-primary-foreground">
           {t('selectOpponent', lang)}
         </h1>
-      </div>
-
-      {/* Player list */}
-      <div className="flex-1 overflow-y-auto p-4">
-        <div className="mx-auto flex max-w-md flex-col gap-3">
-          {opponents.map(player => (
+        <div className="flex gap-2">
+          {currentProfile && (
             <button
-              key={player.id}
-              onClick={() => onSelect(player)}
-              className="flex items-center gap-4 rounded-2xl bg-card p-4 shadow-sm transition-all active:scale-[0.98] hover:shadow-md"
+              onClick={() => onNavigate('profile')}
+              className="flex items-center gap-2 rounded-xl bg-primary-foreground/10 px-3 py-2 active:scale-95"
             >
-              {player.avatar_url ? (
-                <img
-                  src={player.avatar_url}
-                  alt={player.display_name}
-                  className="h-12 w-12 rounded-full object-cover"
-                />
+              {currentProfile.avatar_url ? (
+                <img src={currentProfile.avatar_url} alt="" className="h-7 w-7 rounded-full object-cover" />
               ) : (
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-xl font-bold text-primary">
-                  {player.display_name.charAt(0).toUpperCase()}
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary-foreground/20 text-sm font-bold text-primary-foreground">
+                  {currentProfile.display_name.charAt(0).toUpperCase()}
                 </div>
               )}
-              <span className="text-lg font-semibold text-card-foreground">
-                {player.display_name}
-              </span>
-              {player.is_guest && (
-                <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                  Guest
-                </span>
-              )}
             </button>
+          )}
+          <button
+            onClick={() => onNavigate('stats')}
+            className="rounded-xl bg-primary-foreground/10 px-3 py-2 text-sm font-semibold text-primary-foreground active:scale-95"
+          >
+            📊
+          </button>
+          <button
+            onClick={() => onNavigate('settings')}
+            className="rounded-xl bg-primary-foreground/10 px-3 py-2 text-sm font-semibold text-primary-foreground active:scale-95"
+          >
+            ⚙️
+          </button>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto p-4">
+        <div className="mx-auto flex max-w-md flex-col gap-3">
+          {/* Incoming match requests */}
+          <MatchRequestNotification
+            requests={incomingRequests}
+            lang={lang}
+            onAccept={onAcceptRequest}
+            onDecline={onDeclineRequest}
+          />
+
+          {/* Player list */}
+          {opponents.map(player => (
+            <div
+              key={player.id}
+              className="flex items-center gap-4 rounded-2xl bg-card p-4 shadow-sm transition-all"
+            >
+              <button
+                onClick={() => player.is_guest ? onSelect(player) : onSendChallenge(player)}
+                className="flex flex-1 items-center gap-4 active:scale-[0.98]"
+              >
+                {player.avatar_url ? (
+                  <img
+                    src={player.avatar_url}
+                    alt={player.display_name}
+                    className="h-12 w-12 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-xl font-bold text-primary">
+                    {player.display_name.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <div className="flex-1 text-left">
+                  <span className="text-lg font-semibold text-card-foreground">
+                    {player.display_name}
+                  </span>
+                  {player.is_guest && (
+                    <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                      Guest
+                    </span>
+                  )}
+                </div>
+              </button>
+              {player.is_guest ? (
+                <button
+                  onClick={() => onSelect(player)}
+                  className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground active:scale-95"
+                >
+                  {t('startDirectly', lang)}
+                </button>
+              ) : (
+                <button
+                  onClick={() => onSendChallenge(player)}
+                  className="rounded-xl bg-accent px-4 py-2 text-sm font-bold text-accent-foreground active:scale-95"
+                >
+                  {t('challenge', lang)}
+                </button>
+              )}
+            </div>
           ))}
 
           {opponents.length === 0 && (

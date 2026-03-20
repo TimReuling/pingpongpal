@@ -29,7 +29,6 @@ export default function ScoreBoard({
   const [animatingPlayer, setAnimatingPlayer] = useState<1 | 2 | null>(null);
   const initialized = useRef(false);
 
-  // Load win counts
   useEffect(() => {
     const loadWins = async () => {
       const [r1, r2] = await Promise.all([
@@ -42,7 +41,6 @@ export default function ScoreBoard({
     loadWins();
   }, [player1.id, player2.id]);
 
-  // Create match record
   useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
@@ -57,7 +55,6 @@ export default function ScoreBoard({
     createMatch();
   }, [player1.id, player2.id, targetScore]);
 
-  // Save score to DB
   const saveScore = useCallback(async (state: MatchState) => {
     if (!matchId) return;
     const update: any = {
@@ -72,20 +69,14 @@ export default function ScoreBoard({
     await supabase.from('matches').update(update).eq('id', matchId);
   }, [matchId, player1.id, player2.id]);
 
-  // Update stats after win
   const updateStats = useCallback(async (winner: 1 | 2, finalState: MatchState) => {
     const winnerId = winner === 1 ? player1.id : player2.id;
     const loserId = winner === 1 ? player2.id : player1.id;
     const winnerScored = winner === 1 ? finalState.player1Score : finalState.player2Score;
     const loserScored = winner === 1 ? finalState.player2Score : finalState.player1Score;
 
-    // Update winner stats
     const { data: winnerStats } = await supabase
-      .from('player_stats')
-      .select('*')
-      .eq('profile_id', winnerId)
-      .single();
-
+      .from('player_stats').select('*').eq('profile_id', winnerId).single();
     if (winnerStats) {
       const newStreak = (winnerStats.current_win_streak || 0) + 1;
       await supabase.from('player_stats').update({
@@ -98,13 +89,8 @@ export default function ScoreBoard({
       }).eq('profile_id', winnerId);
     }
 
-    // Update loser stats
     const { data: loserStats } = await supabase
-      .from('player_stats')
-      .select('*')
-      .eq('profile_id', loserId)
-      .single();
-
+      .from('player_stats').select('*').eq('profile_id', loserId).single();
     if (loserStats) {
       await supabase.from('player_stats').update({
         matches_played: loserStats.matches_played + 1,
@@ -122,7 +108,6 @@ export default function ScoreBoard({
       const prevServer = prev.server;
       const newState = updateScore(prev, player, delta, firstServer);
 
-      // Sound effects
       if (soundEnabled) {
         if (delta === 1) playScoreUp();
         else playScoreDown();
@@ -131,7 +116,6 @@ export default function ScoreBoard({
         }
       }
 
-      // Trigger animation
       if (delta === 1) {
         setAnimatingPlayer(player);
         setTimeout(() => setAnimatingPlayer(null), 200);
@@ -158,7 +142,6 @@ export default function ScoreBoard({
     setMatchState(getInitialMatchState(targetScore));
     initialized.current = false;
     setMatchId(null);
-    // Re-trigger match creation
     const createMatch = async () => {
       const { data } = await supabase
         .from('matches')
@@ -178,7 +161,6 @@ export default function ScoreBoard({
   return (
     <>
       <div className="flex h-dvh flex-col overflow-hidden">
-        {/* Player 1 - Top half (rotated 180 for face-to-face play) */}
         <PlayerHalf
           player={player1}
           score={matchState.player1Score}
@@ -192,7 +174,6 @@ export default function ScoreBoard({
           lang={lang}
         />
 
-        {/* Center bar: net line + nav */}
         <div className="relative z-10 flex h-14 items-center justify-center bg-card shadow-md">
           <div className="absolute left-0 right-0 top-0 h-0.5 bg-border" />
           <div className="flex gap-6">
@@ -218,7 +199,6 @@ export default function ScoreBoard({
           <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-border" />
         </div>
 
-        {/* Player 2 - Bottom half */}
         <PlayerHalf
           player={player2}
           score={matchState.player2Score}
@@ -246,6 +226,18 @@ export default function ScoreBoard({
   );
 }
 
+/* ─── Ping Pong Paddle SVG Icon ─── */
+function PaddleIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 64 64" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="30" cy="24" rx="18" ry="22" fill="hsl(var(--service-indicator))" opacity="0.9" />
+      <ellipse cx="30" cy="24" rx="14" ry="18" fill="hsl(var(--service-indicator))" opacity="0.6" />
+      <rect x="26" y="44" width="8" height="16" rx="3" fill="hsl(var(--primary-foreground))" opacity="0.7" />
+      <circle cx="48" cy="12" r="6" fill="hsl(var(--primary-foreground))" opacity="0.85" />
+    </svg>
+  );
+}
+
 interface PlayerHalfProps {
   player: Tables<'profiles'>;
   score: number;
@@ -269,22 +261,28 @@ function PlayerHalf({
       } ${isServing && isActive ? 'active-glow' : ''}`}
       style={rotated ? { transform: 'rotate(180deg)' } : undefined}
     >
-      {/* Service indicator */}
+      {/* Enhanced service indicator */}
       {isServing && isActive && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-2">
-          <div className="service-dot" />
-          <span className="text-xs font-semibold uppercase tracking-wider text-primary-foreground/70">
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-3">
+          <PaddleIcon className="h-8 w-8" />
+          <div className="service-dot-large" />
+          <span className="text-sm font-bold uppercase tracking-wider text-primary-foreground/80">
             {t('service', lang)}
           </span>
         </div>
       )}
 
-      {/* Player name */}
-      <p className={`font-bold tracking-tight text-primary-foreground transition-all duration-300 ${
-        isServing && isActive ? 'text-2xl' : 'text-xl'
-      }`}>
-        {player.display_name}
-      </p>
+      {/* Player avatar + name */}
+      <div className="flex items-center gap-3">
+        {player.avatar_url ? (
+          <img src={player.avatar_url} alt="" className="h-10 w-10 rounded-full object-cover border-2 border-primary-foreground/30" />
+        ) : null}
+        <p className={`font-bold tracking-tight text-primary-foreground transition-all duration-300 ${
+          isServing && isActive ? 'text-2xl' : 'text-xl'
+        }`}>
+          {player.display_name}
+        </p>
+      </div>
 
       {/* Score */}
       <p className={`score-font text-8xl font-bold text-primary-foreground leading-none my-2 transition-transform duration-200 ${
@@ -299,7 +297,7 @@ function PlayerHalf({
       </p>
 
       {/* Buttons */}
-      <div className="absolute bottom-6 left-6 right-6 flex justify-between">
+      <div className="absolute bottom-6 left-6 right-6 flex justify-between safe-bottom">
         <button onClick={onPlus} className="score-btn score-btn-plus h-16 w-20">
           +1
         </button>
