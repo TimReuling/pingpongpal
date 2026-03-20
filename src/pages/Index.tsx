@@ -53,14 +53,8 @@ export default function Index() {
     await respondToRequest(requestId, false);
   }, [respondToRequest]);
 
-  // Listen for accepted outgoing requests
-  const { outgoing } = useMatchRequests(profile?.id);
-  useEffect(() => {
-    // Don't auto-navigate if already in a match
-    if (page === 'match') return;
-    // Check if any outgoing request was just accepted
-    // (We don't have a good way to detect this without more state, skip for now)
-  }, [outgoing, page]);
+  // Placeholder for future: auto-navigate when outgoing request is accepted
+  void outgoing;
 
   const myStats = stats.find(s => s.profile_id === profile?.id) ?? null;
 
