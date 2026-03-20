@@ -20,7 +20,7 @@ export default function Index() {
   const { user, profile, loading, signOut, setProfile } = useAuth();
   const { settings, updateSetting } = useAppSettings();
   const { players, addGuest, deleteGuest } = usePlayers(user?.id);
-  const { incoming, sendRequest, respondToRequest } = useMatchRequests(profile?.id);
+  const { incoming, outgoing, sendRequest, respondToRequest } = useMatchRequests(profile?.id);
   const { stats } = usePlayerStats();
   const [page, setPage] = useState<Page>('select');
   const [opponent, setOpponent] = useState<Tables<'profiles'> | null>(null);
