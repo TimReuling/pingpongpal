@@ -14,6 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      match_requests: {
+        Row: {
+          created_at: string
+          from_profile_id: string
+          id: string
+          responded_at: string | null
+          status: string
+          target_score: number
+          to_profile_id: string
+        }
+        Insert: {
+          created_at?: string
+          from_profile_id: string
+          id?: string
+          responded_at?: string | null
+          status?: string
+          target_score?: number
+          to_profile_id: string
+        }
+        Update: {
+          created_at?: string
+          from_profile_id?: string
+          id?: string
+          responded_at?: string | null
+          status?: string
+          target_score?: number
+          to_profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_requests_from_profile_id_fkey"
+            columns: ["from_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_requests_to_profile_id_fkey"
+            columns: ["to_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       matches: {
         Row: {
           completed_at: string | null
