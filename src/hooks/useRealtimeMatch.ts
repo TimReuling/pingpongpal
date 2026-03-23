@@ -1,6 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { calculateServer, checkWinner } from '@/lib/scoring';
 
 export interface RealtimeMatchState {
   matchId: string;
@@ -18,7 +17,19 @@ export interface RealtimeMatchState {
 export function useRealtimeMatch(matchId: string | null) {
   const [match, setMatch] = useState<RealtimeMatchState | null>(null);
   const [loading, setLoading] = useState(true);
-  const updatingRef = useRef(false);
+
+  const toRealtimeState = useCallback((data: any): RealtimeMatchState => ({
+    matchId: data.id,
+    player1Score: data.player1_score,
+    player2Score: data.player2_score,
+    server: data.server,
+    firstServer: data.first_server,
+    targetScore: data.target_score,
+    status: data.status === 'completed' ? 'finished' : data.status,
+    winnerId: data.winner_id,
+    player1Id: data.player1_id,
+    player2Id: data.player2_id,
+  }), []);
 
   // Fetch initial match data
   useEffect(() => {
@@ -31,23 +42,12 @@ export function useRealtimeMatch(matchId: string | null) {
         .eq('id', matchId)
         .single();
       if (data) {
-        setMatch({
-          matchId: data.id,
-          player1Score: data.player1_score,
-          player2Score: data.player2_score,
-          server: data.server,
-          firstServer: data.first_server,
-          targetScore: data.target_score,
-          status: data.status,
-          winnerId: data.winner_id,
-          player1Id: data.player1_id,
-          player2Id: data.player2_id,
-        });
+        setMatch(toRealtimeState(data));
       }
       setLoading(false);
     };
     fetch();
-  }, [matchId]);
+  }, [matchId, toRealtimeState]);
 
   // Subscribe to realtime updates
   useEffect(() => {
@@ -64,24 +64,8 @@ export function useRealtimeMatch(matchId: string | null) {
           filter: `id=eq.${matchId}`,
         },
         (payload) => {
-          // Don't overwrite if we're the one who just updated
-          if (updatingRef.current) {
-            updatingRef.current = false;
-            return;
-          }
           const d = payload.new as any;
-          setMatch({
-            matchId: d.id,
-            player1Score: d.player1_score,
-            player2Score: d.player2_score,
-            server: d.server,
-            firstServer: d.first_server,
-            targetScore: d.target_score,
-            status: d.status,
-            winnerId: d.winner_id,
-            player1Id: d.player1_id,
-            player2Id: d.player2_id,
-          });
+          setMatch(toRealtimeState(d));
         }
       )
       .subscribe();
@@ -89,46 +73,47 @@ export function useRealtimeMatch(matchId: string | null) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [matchId]);
+  }, [matchId, toRealtimeState]);
 
   const updateScore = useCallback(async (player: 1 | 2, delta: 1 | -1) => {
-    if (!match || !matchId) return null;
-    if (match.status === 'completed' && delta === 1) return match;
+    if (!matchId) return null;
 
-    const newP1 = player === 1 ? Math.max(0, match.player1Score + delta) : match.player1Score;
-    const newP2 = player === 2 ? Math.max(0, match.player2Score + delta) : match.player2Score;
-    const firstServer = match.firstServer as 1 | 2;
-    const server = calculateServer(newP1, newP2, match.targetScore, firstServer);
-    const winner = checkWinner(newP1, newP2, match.targetScore);
+    const { data, error } = await supabase.rpc('update_match_score', {
+      p_match_id: matchId,
+      p_player: player,
+      p_delta: delta,
+    });
 
-    const update: any = {
-      player1_score: newP1,
-      player2_score: newP2,
-      server,
-    };
-
-    if (winner) {
-      update.status = 'completed';
-      update.winner_id = winner === 1 ? match.player1Id : match.player2Id;
-      update.completed_at = new Date().toISOString();
+    if (error || !data) {
+      console.error('Failed to update live match score', error);
+      return null;
     }
 
-    // Optimistic local update
-    const newState: RealtimeMatchState = {
-      ...match,
-      player1Score: newP1,
-      player2Score: newP2,
-      server,
-      status: winner ? 'completed' : match.status,
-      winnerId: winner ? (winner === 1 ? match.player1Id : match.player2Id) : match.winnerId,
-    };
-    setMatch(newState);
-    updatingRef.current = true;
+    const nextState = toRealtimeState(data);
+    setMatch(nextState);
+    return nextState;
+  }, [matchId, toRealtimeState]);
 
-    await supabase.from('matches').update(update).eq('id', matchId);
+  const closeMatch = useCallback(async (status: 'finished' | 'cancelled' | 'abandoned') => {
+    if (!matchId) return null;
 
-    return newState;
-  }, [match, matchId]);
+    const { data, error } = await supabase.rpc('finalize_match_session', {
+      p_match_id: matchId,
+      p_status: status,
+      p_closed_by_profile_id: null,
+    });
 
-  return { match, loading, updateScore };
+    if (error) {
+      console.error('Failed to close match session', error);
+      return null;
+    }
+
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) return null;
+
+    setMatch((prev) => prev ? { ...prev, status: row.status, winnerId: row.winner_id ?? prev.winnerId } : prev);
+    return row;
+  }, [matchId]);
+
+  return { match, loading, updateScore, closeMatch };
 }
