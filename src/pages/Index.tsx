@@ -23,7 +23,7 @@ export default function Index() {
   const { players, addGuest, deleteGuest } = usePlayers(user?.id);
   const { incoming, outgoing, sendRequest, respondToRequest } = useMatchRequests(profile?.id);
   const { stats } = usePlayerStats();
-  const { activeMatchId, activeOpponentId, recheck: recheckActive } = useActiveMatch(profile?.id);
+  const { activeMatchId, activeOpponentId, recheck: recheckActive, clearActiveMatch } = useActiveMatch(profile?.id);
   const [page, setPage] = useState<Page>('select');
   const [currentMatchId, setCurrentMatchId] = useState<string | null>(null);
   const [opponent, setOpponent] = useState<Tables<'profiles'> | null>(null);
@@ -43,21 +43,33 @@ export default function Index() {
   // Watch outgoing accepted requests to auto-navigate challenger into match
   useEffect(() => {
     const accepted = outgoing.find(r => r.status === 'accepted' && r.match_id);
-    if (accepted && page === 'select') {
+    if (!accepted || page !== 'select') return;
+
+    const validateAndOpen = async () => {
+      const { data } = await (await import('@/integrations/supabase/client')).supabase
+        .from('matches')
+        .select('id, status')
+        .eq('id', accepted.match_id!)
+        .single();
+
+      if (data?.status !== 'active') return;
+
       const opp = players.find(p => p.id === accepted.to_profile_id);
       if (opp) {
         setOpponent(opp);
         setCurrentMatchId(accepted.match_id!);
         setPage('match');
       }
-    }
+    };
+
+    void validateAndOpen();
   }, [outgoing, players, page]);
 
   const handleSelectOpponent = useCallback(async (player: Tables<'profiles'>) => {
     // For guests, create match directly
     const { data } = await (await import('@/integrations/supabase/client')).supabase
       .from('matches')
-      .insert({ player1_id: profile!.id, player2_id: player.id, target_score: settings.targetScore })
+      .insert({ player1_id: profile!.id, player2_id: player.id, target_score: settings.targetScore, status: 'active' })
       .select('id')
       .single();
     if (data) {
@@ -68,11 +80,12 @@ export default function Index() {
   }, [profile, settings.targetScore]);
 
   const handleNewMatch = useCallback(() => {
+    clearActiveMatch();
     setOpponent(null);
     setCurrentMatchId(null);
     setPage('select');
     recheckActive();
-  }, [recheckActive]);
+  }, [clearActiveMatch, recheckActive]);
 
   const handleSendChallenge = useCallback(async (player: Tables<'profiles'>) => {
     await sendRequest(player.id, settings.targetScore);

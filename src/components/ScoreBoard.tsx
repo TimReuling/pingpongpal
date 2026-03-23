@@ -20,26 +20,25 @@ interface ScoreBoardProps {
 export default function ScoreBoard({
   player1, player2, matchId, lang, onNavigate, onNewMatch, onMatchComplete, soundEnabled,
 }: ScoreBoardProps) {
-  const { match, updateScore } = useRealtimeMatch(matchId);
+  const { match, updateScore, closeMatch } = useRealtimeMatch(matchId);
   const [showWinner, setShowWinner] = useState(false);
   const [p1Wins, setP1Wins] = useState(0);
   const [p2Wins, setP2Wins] = useState(0);
   const [animatingPlayer, setAnimatingPlayer] = useState<1 | 2 | null>(null);
   const [prevScores, setPrevScores] = useState<{ p1: number; p2: number } | null>(null);
-  const [statsUpdated, setStatsUpdated] = useState(false);
 
-  // Load win counts
-  useEffect(() => {
-    const loadWins = async () => {
-      const [r1, r2] = await Promise.all([
-        supabase.from('player_stats').select('matches_won').eq('profile_id', player1.id).single(),
-        supabase.from('player_stats').select('matches_won').eq('profile_id', player2.id).single(),
-      ]);
-      setP1Wins(r1.data?.matches_won ?? 0);
-      setP2Wins(r2.data?.matches_won ?? 0);
-    };
-    loadWins();
+  const loadWins = useCallback(async () => {
+    const [r1, r2] = await Promise.all([
+      supabase.from('player_stats').select('matches_won').eq('profile_id', player1.id).single(),
+      supabase.from('player_stats').select('matches_won').eq('profile_id', player2.id).single(),
+    ]);
+    setP1Wins(r1.data?.matches_won ?? 0);
+    setP2Wins(r2.data?.matches_won ?? 0);
   }, [player1.id, player2.id]);
+
+  useEffect(() => {
+    loadWins();
+  }, [loadWins]);
 
   // Sound effects on score changes (from realtime updates too)
   useEffect(() => {
@@ -64,81 +63,54 @@ export default function ScoreBoard({
     setPrevScores({ p1: match.player1Score, p2: match.player2Score });
   }, [match?.player1Score, match?.player2Score]);
 
-  // Handle match completion
   useEffect(() => {
     if (!match || match.status !== 'completed' || !match.winnerId) return;
-    if (statsUpdated) return;
 
     const timer = setTimeout(() => {
       setShowWinner(true);
-      setStatsUpdated(true);
-      updateStats(match.winnerId!, match);
+      loadWins();
       onMatchComplete();
     }, 300);
     return () => clearTimeout(timer);
-  }, [match?.status, match?.winnerId, statsUpdated]);
+  }, [match?.status, match?.winnerId, loadWins, onMatchComplete]);
 
-  const updateStats = async (winnerId: string, m: typeof match) => {
-    if (!m) return;
-    const loserId = winnerId === player1.id ? player2.id : player1.id;
-    const winnerScored = winnerId === player1.id ? m.player1Score : m.player2Score;
-    const loserScored = winnerId === player1.id ? m.player2Score : m.player1Score;
+  useEffect(() => {
+    if (!showWinner) return;
 
-    const { data: winnerStats } = await supabase
-      .from('player_stats').select('*').eq('profile_id', winnerId).single();
-    if (winnerStats) {
-      const newStreak = (winnerStats.current_win_streak || 0) + 1;
-      await supabase.from('player_stats').update({
-        matches_played: winnerStats.matches_played + 1,
-        matches_won: winnerStats.matches_won + 1,
-        total_points_scored: winnerStats.total_points_scored + winnerScored,
-        total_points_conceded: winnerStats.total_points_conceded + loserScored,
-        current_win_streak: newStreak,
-        best_win_streak: Math.max(winnerStats.best_win_streak, newStreak),
-      }).eq('profile_id', winnerId);
-      if (winnerId === player1.id) setP1Wins(winnerStats.matches_won + 1);
-      else setP2Wins(winnerStats.matches_won + 1);
-    }
+    const timer = setTimeout(() => {
+      setShowWinner(false);
+      onNewMatch();
+    }, 4000);
 
-    const { data: loserStats } = await supabase
-      .from('player_stats').select('*').eq('profile_id', loserId).single();
-    if (loserStats) {
-      await supabase.from('player_stats').update({
-        matches_played: loserStats.matches_played + 1,
-        matches_lost: loserStats.matches_lost + 1,
-        total_points_scored: loserStats.total_points_scored + loserScored,
-        total_points_conceded: loserStats.total_points_conceded + winnerScored,
-        current_win_streak: 0,
-      }).eq('profile_id', loserId);
-    }
-  };
+    return () => clearTimeout(timer);
+  }, [showWinner, onNewMatch]);
 
   const handleScore = useCallback(async (player: 1 | 2, delta: 1 | -1) => {
     if (!match) return;
     const prevServer = match.server;
     const result = await updateScore(player, delta);
-    if (result && soundEnabled && result.server !== prevServer && result.status !== 'completed') {
+    if (result && soundEnabled && result.server !== prevServer && result.status === 'active') {
       setTimeout(() => playServiceChange(), 150);
     }
   }, [match, updateScore, soundEnabled]);
 
   const handlePlayAgain = async () => {
     setShowWinner(false);
-    setStatsUpdated(false);
     setPrevScores(null);
-    // Create a new match
     const { data } = await supabase
       .from('matches')
-      .insert({ player1_id: player1.id, player2_id: player2.id, target_score: match?.targetScore ?? 11 })
+      .insert({ player1_id: player1.id, player2_id: player2.id, target_score: match?.targetScore ?? 11, status: 'active' })
       .select('id')
       .single();
     if (data) {
-      // Navigate to new match - the parent will handle this via activeMatch
       onNewMatch();
     }
   };
 
-  const handleNewOpponent = () => {
+  const handleNewOpponent = async () => {
+    if (match?.status === 'active') {
+      await closeMatch('abandoned');
+    }
     setShowWinner(false);
     onNewMatch();
   };
@@ -151,7 +123,7 @@ export default function ScoreBoard({
     );
   }
 
-  const isComplete = match.status === 'completed';
+  const isComplete = match.status !== 'active';
 
   return (
     <>
@@ -169,14 +141,13 @@ export default function ScoreBoard({
           lang={lang}
         />
 
-        <div className="relative z-10 flex h-14 items-center justify-center bg-card shadow-md">
+        <div className="relative z-10 flex min-h-16 items-center justify-center bg-card px-4 py-3 shadow-md">
           <div className="absolute left-0 right-0 top-0 h-0.5 bg-border" />
-          {/* Live indicator */}
-          <div className="absolute left-4 flex items-center gap-1.5">
-            <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+          <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1">
+            <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
             <span className="text-xs font-medium text-muted-foreground">LIVE</span>
           </div>
-          <div className="flex gap-6">
+          <div className="flex gap-3 pr-16">
             <button
               onClick={() => onNavigate('stats')}
               className="rounded-full bg-muted px-4 py-1.5 text-sm font-semibold text-muted-foreground transition-all active:scale-95"

@@ -99,6 +99,8 @@ export function useMatchRequests(profileId: string | undefined) {
 
   const sendRequest = useCallback(async (toProfileId: string, targetScore: number) => {
     if (!profileId) return null;
+    await supabase.rpc('cleanup_stale_match_sessions', { p_profile_id: profileId });
+
     // Cancel any existing pending requests to same opponent
     await supabase
       .from('match_requests')
@@ -132,39 +134,16 @@ export function useMatchRequests(profileId: string | undefined) {
       return null;
     }
 
-    // Get the request details
-    const { data: request } = await supabase
-      .from('match_requests')
-      .select('*')
-      .eq('id', requestId)
-      .single();
+    const { data, error } = await supabase.rpc('accept_match_request', {
+      p_request_id: requestId,
+    });
 
-    if (!request) return null;
+    if (error) {
+      console.error('Failed to accept match request', error);
+      return null;
+    }
 
-    // Create the shared match
-    const { data: match } = await supabase
-      .from('matches')
-      .insert({
-        player1_id: request.from_profile_id,
-        player2_id: request.to_profile_id,
-        target_score: request.target_score,
-      })
-      .select('id')
-      .single();
-
-    if (!match) return null;
-
-    // Update request with match_id and status
-    await supabase
-      .from('match_requests')
-      .update({
-        status: 'accepted',
-        responded_at: new Date().toISOString(),
-        match_id: match.id,
-      })
-      .eq('id', requestId);
-
-    return match.id;
+    return data ?? null;
   }, []);
 
   return { incoming, outgoing, loading, sendRequest, respondToRequest, refetch: fetchRequests };

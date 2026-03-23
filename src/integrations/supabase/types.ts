@@ -82,6 +82,7 @@ export type Database = {
           server: number
           status: string
           target_score: number
+          updated_at: string
           winner_id: string | null
         }
         Insert: {
@@ -96,6 +97,7 @@ export type Database = {
           server?: number
           status?: string
           target_score?: number
+          updated_at?: string
           winner_id?: string | null
         }
         Update: {
@@ -110,6 +112,7 @@ export type Database = {
           server?: number
           status?: string
           target_score?: number
+          updated_at?: string
           winner_id?: string | null
         }
         Relationships: [
@@ -221,7 +224,48 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      accept_match_request: { Args: { p_request_id: string }; Returns: string }
+      cleanup_stale_match_sessions: {
+        Args: { p_profile_id?: string }
+        Returns: number
+      }
+      finalize_match_session: {
+        Args: {
+          p_closed_by_profile_id?: string
+          p_match_id: string
+          p_status?: string
+        }
+        Returns: {
+          completed_at: string
+          id: string
+          status: string
+          winner_id: string
+        }[]
+      }
+      update_match_score: {
+        Args: { p_delta: number; p_match_id: string; p_player: number }
+        Returns: {
+          completed_at: string | null
+          created_at: string
+          first_server: number
+          id: string
+          player1_id: string
+          player1_score: number
+          player2_id: string
+          player2_score: number
+          server: number
+          status: string
+          target_score: number
+          updated_at: string
+          winner_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "matches"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
     }
     Enums: {
       [_ in never]: never
