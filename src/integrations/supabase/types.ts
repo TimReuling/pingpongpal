@@ -19,6 +19,7 @@ export type Database = {
           created_at: string
           from_profile_id: string
           id: string
+          match_id: string | null
           responded_at: string | null
           status: string
           target_score: number
@@ -28,6 +29,7 @@ export type Database = {
           created_at?: string
           from_profile_id: string
           id?: string
+          match_id?: string | null
           responded_at?: string | null
           status?: string
           target_score?: number
@@ -37,6 +39,7 @@ export type Database = {
           created_at?: string
           from_profile_id?: string
           id?: string
+          match_id?: string | null
           responded_at?: string | null
           status?: string
           target_score?: number
@@ -48,6 +51,13 @@ export type Database = {
             columns: ["from_profile_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_requests_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
             referencedColumns: ["id"]
           },
           {
@@ -63,11 +73,13 @@ export type Database = {
         Row: {
           completed_at: string | null
           created_at: string
+          first_server: number
           id: string
           player1_id: string
           player1_score: number
           player2_id: string
           player2_score: number
+          server: number
           status: string
           target_score: number
           winner_id: string | null
@@ -75,11 +87,13 @@ export type Database = {
         Insert: {
           completed_at?: string | null
           created_at?: string
+          first_server?: number
           id?: string
           player1_id: string
           player1_score?: number
           player2_id: string
           player2_score?: number
+          server?: number
           status?: string
           target_score?: number
           winner_id?: string | null
@@ -87,11 +101,13 @@ export type Database = {
         Update: {
           completed_at?: string | null
           created_at?: string
+          first_server?: number
           id?: string
           player1_id?: string
           player1_score?: number
           player2_id?: string
           player2_score?: number
+          server?: number
           status?: string
           target_score?: number
           winner_id?: string | null
