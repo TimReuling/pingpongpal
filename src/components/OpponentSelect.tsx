@@ -88,8 +88,17 @@ export default function OpponentSelect({
             onDecline={onDeclineRequest}
           />
 
+          {/* Search */}
+          <input
+            type="text"
+            placeholder={`🔍 ${t('noPlayers', lang).replace(/\.$/, '')}...`}
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="rounded-xl border border-input bg-card px-4 py-3 text-card-foreground outline-none focus:ring-2 focus:ring-ring placeholder:text-muted-foreground"
+          />
+
           {/* Player list */}
-          {opponents.map(player => (
+          {filtered.map(player => (
             <div
               key={player.id}
               className="flex items-center gap-4 rounded-2xl bg-card p-4 shadow-sm transition-all"
