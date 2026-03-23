@@ -144,7 +144,7 @@ export default function ScoreBoard({
         <div className="relative z-10 flex min-h-16 items-center justify-center bg-card px-4 py-3 shadow-md">
           <div className="absolute left-0 right-0 top-0 h-0.5 bg-border" />
           <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1">
-            <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+            <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
             <span className="text-xs font-medium text-muted-foreground">LIVE</span>
           </div>
           <div className="flex gap-3 pr-16">
