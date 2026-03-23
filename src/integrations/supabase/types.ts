@@ -242,6 +242,30 @@ export type Database = {
           winner_id: string
         }[]
       }
+      update_match_score: {
+        Args: { p_delta: number; p_match_id: string; p_player: number }
+        Returns: {
+          completed_at: string | null
+          created_at: string
+          first_server: number
+          id: string
+          player1_id: string
+          player1_score: number
+          player2_id: string
+          player2_score: number
+          server: number
+          status: string
+          target_score: number
+          updated_at: string
+          winner_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "matches"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
     }
     Enums: {
       [_ in never]: never
