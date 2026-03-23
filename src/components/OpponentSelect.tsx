@@ -147,7 +147,7 @@ export default function OpponentSelect({
             </div>
           ))}
 
-          {opponents.length === 0 && (
+          {filtered.length === 0 && (
             <p className="py-8 text-center text-muted-foreground">{t('noPlayers', lang)}</p>
           )}
 
