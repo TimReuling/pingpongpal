@@ -25,8 +25,12 @@ export default function OpponentSelect({
 }: OpponentSelectProps) {
   const [guestName, setGuestName] = useState('');
   const [showGuestInput, setShowGuestInput] = useState(false);
+  const [search, setSearch] = useState('');
 
   const opponents = players.filter(p => p.id !== currentProfileId);
+  const filtered = search.trim()
+    ? opponents.filter(p => p.display_name.toLowerCase().includes(search.toLowerCase()))
+    : opponents;
 
   const handleAddGuest = async () => {
     if (!guestName.trim()) return;

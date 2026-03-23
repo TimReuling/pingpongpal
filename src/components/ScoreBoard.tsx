@@ -1,15 +1,15 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import type { Tables } from '@/integrations/supabase/types';
 import { t, type Lang } from '@/lib/i18n';
-import { getInitialMatchState, updateScore, type MatchState } from '@/lib/scoring';
 import { supabase } from '@/integrations/supabase/client';
-import { playScoreUp, playScoreDown, playServiceChange } from '@/lib/sounds';
+import { useRealtimeMatch } from '@/hooks/useRealtimeMatch';
+import { playScoreUp, playScoreDown, playServiceChange, playWin } from '@/lib/sounds';
 import WinnerModal from './WinnerModal';
 
 interface ScoreBoardProps {
   player1: Tables<'profiles'>;
   player2: Tables<'profiles'>;
-  targetScore: number;
+  matchId: string;
   lang: Lang;
   onNavigate: (page: 'stats' | 'settings') => void;
   onNewMatch: () => void;
@@ -18,17 +18,17 @@ interface ScoreBoardProps {
 }
 
 export default function ScoreBoard({
-  player1, player2, targetScore, lang, onNavigate, onNewMatch, onMatchComplete, soundEnabled
+  player1, player2, matchId, lang, onNavigate, onNewMatch, onMatchComplete, soundEnabled,
 }: ScoreBoardProps) {
-  const [matchState, setMatchState] = useState<MatchState>(() => getInitialMatchState(targetScore));
-  const [firstServer] = useState<1 | 2>(1);
-  const [matchId, setMatchId] = useState<string | null>(null);
+  const { match, updateScore } = useRealtimeMatch(matchId);
   const [showWinner, setShowWinner] = useState(false);
   const [p1Wins, setP1Wins] = useState(0);
   const [p2Wins, setP2Wins] = useState(0);
   const [animatingPlayer, setAnimatingPlayer] = useState<1 | 2 | null>(null);
-  const initialized = useRef(false);
+  const [prevScores, setPrevScores] = useState<{ p1: number; p2: number } | null>(null);
+  const [statsUpdated, setStatsUpdated] = useState(false);
 
+  // Load win counts
   useEffect(() => {
     const loadWins = async () => {
       const [r1, r2] = await Promise.all([
@@ -41,39 +41,48 @@ export default function ScoreBoard({
     loadWins();
   }, [player1.id, player2.id]);
 
+  // Sound effects on score changes (from realtime updates too)
   useEffect(() => {
-    if (initialized.current) return;
-    initialized.current = true;
-    const createMatch = async () => {
-      const { data } = await supabase
-        .from('matches')
-        .insert({ player1_id: player1.id, player2_id: player2.id, target_score: targetScore })
-        .select('id')
-        .single();
-      if (data) setMatchId(data.id);
-    };
-    createMatch();
-  }, [player1.id, player2.id, targetScore]);
-
-  const saveScore = useCallback(async (state: MatchState) => {
-    if (!matchId) return;
-    const update: any = {
-      player1_score: state.player1Score,
-      player2_score: state.player2Score,
-    };
-    if (state.isComplete && state.winner) {
-      update.status = 'completed';
-      update.winner_id = state.winner === 1 ? player1.id : player2.id;
-      update.completed_at = new Date().toISOString();
+    if (!match || !soundEnabled) return;
+    if (!prevScores) {
+      setPrevScores({ p1: match.player1Score, p2: match.player2Score });
+      return;
     }
-    await supabase.from('matches').update(update).eq('id', matchId);
-  }, [matchId, player1.id, player2.id]);
+    const p1Diff = match.player1Score - prevScores.p1;
+    const p2Diff = match.player2Score - prevScores.p2;
+    const totalDiff = p1Diff + p2Diff;
 
-  const updateStats = useCallback(async (winner: 1 | 2, finalState: MatchState) => {
-    const winnerId = winner === 1 ? player1.id : player2.id;
-    const loserId = winner === 1 ? player2.id : player1.id;
-    const winnerScored = winner === 1 ? finalState.player1Score : finalState.player2Score;
-    const loserScored = winner === 1 ? finalState.player2Score : finalState.player1Score;
+    if (totalDiff > 0) {
+      playScoreUp();
+      if (p1Diff > 0) setAnimatingPlayer(1);
+      else if (p2Diff > 0) setAnimatingPlayer(2);
+      setTimeout(() => setAnimatingPlayer(null), 200);
+    } else if (totalDiff < 0) {
+      playScoreDown();
+    }
+
+    setPrevScores({ p1: match.player1Score, p2: match.player2Score });
+  }, [match?.player1Score, match?.player2Score]);
+
+  // Handle match completion
+  useEffect(() => {
+    if (!match || match.status !== 'completed' || !match.winnerId) return;
+    if (statsUpdated) return;
+
+    const timer = setTimeout(() => {
+      setShowWinner(true);
+      setStatsUpdated(true);
+      updateStats(match.winnerId!, match);
+      onMatchComplete();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [match?.status, match?.winnerId, statsUpdated]);
+
+  const updateStats = async (winnerId: string, m: typeof match) => {
+    if (!m) return;
+    const loserId = winnerId === player1.id ? player2.id : player1.id;
+    const winnerScored = winnerId === player1.id ? m.player1Score : m.player2Score;
+    const loserScored = winnerId === player1.id ? m.player2Score : m.player1Score;
 
     const { data: winnerStats } = await supabase
       .from('player_stats').select('*').eq('profile_id', winnerId).single();
@@ -87,6 +96,8 @@ export default function ScoreBoard({
         current_win_streak: newStreak,
         best_win_streak: Math.max(winnerStats.best_win_streak, newStreak),
       }).eq('profile_id', winnerId);
+      if (winnerId === player1.id) setP1Wins(winnerStats.matches_won + 1);
+      else setP2Wins(winnerStats.matches_won + 1);
     }
 
     const { data: loserStats } = await supabase
@@ -100,57 +111,31 @@ export default function ScoreBoard({
         current_win_streak: 0,
       }).eq('profile_id', loserId);
     }
-  }, [player1.id, player2.id]);
+  };
 
-  const handleScore = useCallback((player: 1 | 2, delta: 1 | -1) => {
-    setMatchState(prev => {
-      if (prev.isComplete && delta === 1) return prev;
-      const prevServer = prev.server;
-      const newState = updateScore(prev, player, delta, firstServer);
+  const handleScore = useCallback(async (player: 1 | 2, delta: 1 | -1) => {
+    if (!match) return;
+    const prevServer = match.server;
+    const result = await updateScore(player, delta);
+    if (result && soundEnabled && result.server !== prevServer && result.status !== 'completed') {
+      setTimeout(() => playServiceChange(), 150);
+    }
+  }, [match, updateScore, soundEnabled]);
 
-      if (soundEnabled) {
-        if (delta === 1) playScoreUp();
-        else playScoreDown();
-        if (newState.server !== prevServer && !newState.isComplete) {
-          setTimeout(() => soundEnabled && playServiceChange(), 150);
-        }
-      }
-
-      if (delta === 1) {
-        setAnimatingPlayer(player);
-        setTimeout(() => setAnimatingPlayer(null), 200);
-      }
-
-      saveScore(newState);
-
-      if (newState.isComplete && newState.winner) {
-        setTimeout(() => {
-          setShowWinner(true);
-          updateStats(newState.winner!, newState);
-          if (newState.winner === 1) setP1Wins(w => w + 1);
-          else setP2Wins(w => w + 1);
-          onMatchComplete();
-        }, 300);
-      }
-
-      return newState;
-    });
-  }, [firstServer, saveScore, updateStats, onMatchComplete, soundEnabled]);
-
-  const handlePlayAgain = () => {
+  const handlePlayAgain = async () => {
     setShowWinner(false);
-    setMatchState(getInitialMatchState(targetScore));
-    initialized.current = false;
-    setMatchId(null);
-    const createMatch = async () => {
-      const { data } = await supabase
-        .from('matches')
-        .insert({ player1_id: player1.id, player2_id: player2.id, target_score: targetScore })
-        .select('id')
-        .single();
-      if (data) setMatchId(data.id);
-    };
-    createMatch();
+    setStatsUpdated(false);
+    setPrevScores(null);
+    // Create a new match
+    const { data } = await supabase
+      .from('matches')
+      .insert({ player1_id: player1.id, player2_id: player2.id, target_score: match?.targetScore ?? 11 })
+      .select('id')
+      .single();
+    if (data) {
+      // Navigate to new match - the parent will handle this via activeMatch
+      onNewMatch();
+    }
   };
 
   const handleNewOpponent = () => {
@@ -158,15 +143,25 @@ export default function ScoreBoard({
     onNewMatch();
   };
 
+  if (!match) {
+    return (
+      <div className="flex h-dvh items-center justify-center bg-table-green-dark">
+        <div className="text-2xl font-bold text-primary-foreground">Loading match...</div>
+      </div>
+    );
+  }
+
+  const isComplete = match.status === 'completed';
+
   return (
     <>
       <div className="flex h-dvh flex-col overflow-hidden">
         <PlayerHalf
           player={player1}
-          score={matchState.player1Score}
+          score={match.player1Score}
           wins={p1Wins}
-          isServing={matchState.server === 1}
-          isActive={!matchState.isComplete}
+          isServing={match.server === 1}
+          isActive={!isComplete}
           animating={animatingPlayer === 1}
           onPlus={() => handleScore(1, 1)}
           onMinus={() => handleScore(1, -1)}
@@ -176,6 +171,11 @@ export default function ScoreBoard({
 
         <div className="relative z-10 flex h-14 items-center justify-center bg-card shadow-md">
           <div className="absolute left-0 right-0 top-0 h-0.5 bg-border" />
+          {/* Live indicator */}
+          <div className="absolute left-4 flex items-center gap-1.5">
+            <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+            <span className="text-xs font-medium text-muted-foreground">LIVE</span>
+          </div>
           <div className="flex gap-6">
             <button
               onClick={() => onNavigate('stats')}
@@ -201,10 +201,10 @@ export default function ScoreBoard({
 
         <PlayerHalf
           player={player2}
-          score={matchState.player2Score}
+          score={match.player2Score}
           wins={p2Wins}
-          isServing={matchState.server === 2}
-          isActive={!matchState.isComplete}
+          isServing={match.server === 2}
+          isActive={!isComplete}
           animating={animatingPlayer === 2}
           onPlus={() => handleScore(2, 1)}
           onMinus={() => handleScore(2, -1)}
@@ -212,10 +212,10 @@ export default function ScoreBoard({
         />
       </div>
 
-      {showWinner && matchState.winner && (
+      {showWinner && match.winnerId && (
         <WinnerModal
-          winnerName={matchState.winner === 1 ? player1.display_name : player2.display_name}
-          score={`${matchState.player1Score} - ${matchState.player2Score}`}
+          winnerName={match.winnerId === player1.id ? player1.display_name : player2.display_name}
+          score={`${match.player1Score} - ${match.player2Score}`}
           onPlayAgain={handlePlayAgain}
           onNewOpponent={handleNewOpponent}
           lang={lang}
@@ -252,7 +252,7 @@ interface PlayerHalfProps {
 }
 
 function PlayerHalf({
-  player, score, wins, isServing, isActive, animating, onPlus, onMinus, rotated, lang
+  player, score, wins, isServing, isActive, animating, onPlus, onMinus, rotated, lang,
 }: PlayerHalfProps) {
   return (
     <div
