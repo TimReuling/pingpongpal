@@ -9,6 +9,7 @@ export interface MatchRequest {
   status: string;
   created_at: string;
   responded_at: string | null;
+  match_id: string | null;
   from_name?: string;
   from_avatar?: string | null;
   to_name?: string;
@@ -34,7 +35,7 @@ export function useMatchRequests(profileId: string | undefined) {
       .from('match_requests')
       .select('*')
       .eq('from_profile_id', profileId)
-      .eq('status', 'pending')
+      .in('status', ['pending', 'accepted'])
       .order('created_at', { ascending: false });
 
     // Enrich with profile names
@@ -119,14 +120,51 @@ export function useMatchRequests(profileId: string | undefined) {
     return data;
   }, [profileId]);
 
-  const respondToRequest = useCallback(async (requestId: string, accept: boolean) => {
+  const respondToRequest = useCallback(async (requestId: string, accept: boolean): Promise<string | null> => {
+    if (!accept) {
+      await supabase
+        .from('match_requests')
+        .update({
+          status: 'declined',
+          responded_at: new Date().toISOString(),
+        })
+        .eq('id', requestId);
+      return null;
+    }
+
+    // Get the request details
+    const { data: request } = await supabase
+      .from('match_requests')
+      .select('*')
+      .eq('id', requestId)
+      .single();
+
+    if (!request) return null;
+
+    // Create the shared match
+    const { data: match } = await supabase
+      .from('matches')
+      .insert({
+        player1_id: request.from_profile_id,
+        player2_id: request.to_profile_id,
+        target_score: request.target_score,
+      })
+      .select('id')
+      .single();
+
+    if (!match) return null;
+
+    // Update request with match_id and status
     await supabase
       .from('match_requests')
       .update({
-        status: accept ? 'accepted' : 'declined',
+        status: 'accepted',
         responded_at: new Date().toISOString(),
+        match_id: match.id,
       })
       .eq('id', requestId);
+
+    return match.id;
   }, []);
 
   return { incoming, outgoing, loading, sendRequest, respondToRequest, refetch: fetchRequests };

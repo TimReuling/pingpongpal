@@ -25,8 +25,12 @@ export default function OpponentSelect({
 }: OpponentSelectProps) {
   const [guestName, setGuestName] = useState('');
   const [showGuestInput, setShowGuestInput] = useState(false);
+  const [search, setSearch] = useState('');
 
   const opponents = players.filter(p => p.id !== currentProfileId);
+  const filtered = search.trim()
+    ? opponents.filter(p => p.display_name.toLowerCase().includes(search.toLowerCase()))
+    : opponents;
 
   const handleAddGuest = async () => {
     if (!guestName.trim()) return;
@@ -84,8 +88,17 @@ export default function OpponentSelect({
             onDecline={onDeclineRequest}
           />
 
+          {/* Search */}
+          <input
+            type="text"
+            placeholder={`🔍 ${t('noPlayers', lang).replace(/\.$/, '')}...`}
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="rounded-xl border border-input bg-card px-4 py-3 text-card-foreground outline-none focus:ring-2 focus:ring-ring placeholder:text-muted-foreground"
+          />
+
           {/* Player list */}
-          {opponents.map(player => (
+          {filtered.map(player => (
             <div
               key={player.id}
               className="flex items-center gap-4 rounded-2xl bg-card p-4 shadow-sm transition-all"
@@ -134,7 +147,7 @@ export default function OpponentSelect({
             </div>
           ))}
 
-          {opponents.length === 0 && (
+          {filtered.length === 0 && (
             <p className="py-8 text-center text-muted-foreground">{t('noPlayers', lang)}</p>
           )}
 
