@@ -3,7 +3,8 @@ import type { Tables } from '@/integrations/supabase/types';
 import { t, type Lang } from '@/lib/i18n';
 import { supabase } from '@/integrations/supabase/client';
 import { useRealtimeMatch } from '@/hooks/useRealtimeMatch';
-import { playScoreUp, playScoreDown, playServiceChange, playWin } from '@/lib/sounds';
+import { playScoreUp, playScoreDown, playServiceChange } from '@/lib/sounds';
+import { hasValidSessionPlayers, resolveSessionPlayers } from '@/lib/matchSession';
 import WinnerModal from './WinnerModal';
 
 interface ScoreBoardProps {
@@ -27,14 +28,20 @@ export default function ScoreBoard({
   const [animatingPlayer, setAnimatingPlayer] = useState<1 | 2 | null>(null);
   const [prevScores, setPrevScores] = useState<{ p1: number; p2: number } | null>(null);
 
+  const { playerOne, playerTwo } = match
+    ? resolveSessionPlayers([player1, player2], match.player1Id, match.player2Id)
+    : { playerOne: player1, playerTwo: player2 };
+
   const loadWins = useCallback(async () => {
+    if (!playerOne || !playerTwo) return;
+
     const [r1, r2] = await Promise.all([
-      supabase.from('player_stats').select('matches_won').eq('profile_id', player1.id).single(),
-      supabase.from('player_stats').select('matches_won').eq('profile_id', player2.id).single(),
+      supabase.from('player_stats').select('matches_won').eq('profile_id', playerOne.id).single(),
+      supabase.from('player_stats').select('matches_won').eq('profile_id', playerTwo.id).single(),
     ]);
     setP1Wins(r1.data?.matches_won ?? 0);
     setP2Wins(r2.data?.matches_won ?? 0);
-  }, [player1.id, player2.id]);
+  }, [playerOne, playerTwo]);
 
   useEffect(() => {
     loadWins();
@@ -64,7 +71,7 @@ export default function ScoreBoard({
   }, [match?.player1Score, match?.player2Score]);
 
   useEffect(() => {
-    if (!match || match.status !== 'completed' || !match.winnerId) return;
+    if (!match || match.status !== 'finished' || !match.winnerId) return;
 
     const timer = setTimeout(() => {
       setShowWinner(true);
@@ -95,11 +102,13 @@ export default function ScoreBoard({
   }, [match, updateScore, soundEnabled]);
 
   const handlePlayAgain = async () => {
+    if (!playerOne || !playerTwo) return;
+
     setShowWinner(false);
     setPrevScores(null);
     const { data } = await supabase
       .from('matches')
-      .insert({ player1_id: player1.id, player2_id: player2.id, target_score: match?.targetScore ?? 11, status: 'active' })
+      .insert({ player1_id: playerOne.id, player2_id: playerTwo.id, target_score: match?.targetScore ?? 10, status: 'active' })
       .select('id')
       .single();
     if (data) {
@@ -123,13 +132,28 @@ export default function ScoreBoard({
     );
   }
 
+  if (
+    !playerOne ||
+    !playerTwo ||
+    !hasValidSessionPlayers({ player1Id: match.player1Id, player2Id: match.player2Id })
+  ) {
+    return (
+      <div className="flex h-dvh items-center justify-center bg-table-green-dark">
+        <div className="text-center text-primary-foreground">
+          <div className="text-2xl font-bold">Loading shared session...</div>
+          <div className="mt-2 text-sm text-primary-foreground/70">Syncing player mapping</div>
+        </div>
+      </div>
+    );
+  }
+
   const isComplete = match.status !== 'active';
 
   return (
     <>
       <div className="flex h-dvh flex-col overflow-hidden">
         <PlayerHalf
-          player={player1}
+          player={playerOne}
           score={match.player1Score}
           wins={p1Wins}
           isServing={match.server === 1}
@@ -171,7 +195,7 @@ export default function ScoreBoard({
         </div>
 
         <PlayerHalf
-          player={player2}
+          player={playerTwo}
           score={match.player2Score}
           wins={p2Wins}
           isServing={match.server === 2}
@@ -185,7 +209,7 @@ export default function ScoreBoard({
 
       {showWinner && match.winnerId && (
         <WinnerModal
-          winnerName={match.winnerId === player1.id ? player1.display_name : player2.display_name}
+          winnerName={match.winnerId === playerOne.id ? playerOne.display_name : playerTwo.display_name}
           score={`${match.player1Score} - ${match.player2Score}`}
           onPlayAgain={handlePlayAgain}
           onNewOpponent={handleNewOpponent}

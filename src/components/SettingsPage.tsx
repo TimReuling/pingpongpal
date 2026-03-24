@@ -56,7 +56,7 @@ export default function SettingsPage({
           {/* Target Score */}
           <SettingRow label={t('targetScore', lang)}>
             <div className="flex items-center gap-3">
-              {[7, 11, 15, 21].map(s => (
+              {[7, 10, 15, 21].map(s => (
                 <button
                   key={s}
                   onClick={() => onUpdateSetting('targetScore', s)}

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { hasValidSessionPlayers } from '@/lib/matchSession';
 
 export interface RealtimeMatchState {
   matchId: string;
@@ -25,7 +26,7 @@ export function useRealtimeMatch(matchId: string | null) {
     server: data.server,
     firstServer: data.first_server,
     targetScore: data.target_score,
-    status: data.status === 'completed' ? 'finished' : data.status,
+    status: data.status,
     winnerId: data.winner_id,
     player1Id: data.player1_id,
     player2Id: data.player2_id,
@@ -40,9 +41,11 @@ export function useRealtimeMatch(matchId: string | null) {
         .from('matches')
         .select('*')
         .eq('id', matchId)
-        .single();
-      if (data) {
+        .maybeSingle();
+      if (data && hasValidSessionPlayers({ player1Id: data.player1_id, player2Id: data.player2_id })) {
         setMatch(toRealtimeState(data));
+      } else {
+        setMatch(null);
       }
       setLoading(false);
     };
@@ -65,6 +68,7 @@ export function useRealtimeMatch(matchId: string | null) {
         },
         (payload) => {
           const d = payload.new as any;
+          if (!hasValidSessionPlayers({ player1Id: d?.player1_id, player2Id: d?.player2_id })) return;
           setMatch(toRealtimeState(d));
         }
       )
@@ -76,7 +80,10 @@ export function useRealtimeMatch(matchId: string | null) {
   }, [matchId, toRealtimeState]);
 
   const updateScore = useCallback(async (player: 1 | 2, delta: 1 | -1) => {
-    if (!matchId) return null;
+    if (!matchId || !match || !hasValidSessionPlayers({ player1Id: match.player1Id, player2Id: match.player2Id })) {
+      console.error('Cannot update score without a valid shared match session');
+      return null;
+    }
 
     const { data, error } = await supabase.rpc('update_match_score', {
       p_match_id: matchId,
@@ -92,7 +99,7 @@ export function useRealtimeMatch(matchId: string | null) {
     const nextState = toRealtimeState(data);
     setMatch(nextState);
     return nextState;
-  }, [matchId, toRealtimeState]);
+  }, [matchId, match, toRealtimeState]);
 
   const closeMatch = useCallback(async (status: 'finished' | 'cancelled' | 'abandoned') => {
     if (!matchId) return null;

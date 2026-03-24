@@ -15,7 +15,7 @@ function loadSettings(): AppSettings {
     const stored = localStorage.getItem(SETTINGS_KEY);
     if (stored) return JSON.parse(stored);
   } catch {}
-  return { targetScore: 11, soundEnabled: true, darkMode: false, language: 'en' };
+  return { targetScore: 10, soundEnabled: true, darkMode: false, language: 'en' };
 }
 
 export function useAppSettings() {
