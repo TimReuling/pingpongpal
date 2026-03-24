@@ -11,6 +11,7 @@ import ScoreBoard from '@/components/ScoreBoard';
 import StatsPage from '@/components/StatsPage';
 import SettingsPage from '@/components/SettingsPage';
 import ProfilePage from '@/components/ProfilePage';
+import { supabase } from '@/integrations/supabase/client';
 import type { Tables } from '@/integrations/supabase/types';
 import { toast } from 'sonner';
 import { t } from '@/lib/i18n';
@@ -28,46 +29,59 @@ export default function Index() {
   const [currentMatchId, setCurrentMatchId] = useState<string | null>(null);
   const [opponent, setOpponent] = useState<Tables<'profiles'> | null>(null);
 
+  const openSharedMatch = useCallback(async (matchId: string, opponentId: string | null) => {
+    if (!opponentId) return;
+
+    let nextOpponent = players.find((player) => player.id === opponentId) ?? null;
+
+    if (!nextOpponent) {
+      const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', opponentId)
+        .maybeSingle();
+
+      nextOpponent = data ?? null;
+    }
+
+    if (!nextOpponent) return;
+
+    setOpponent(nextOpponent);
+    setCurrentMatchId(matchId);
+    setPage('match');
+  }, [players]);
+
   // Auto-resume active match on load or when one appears via realtime
   useEffect(() => {
-    if (activeMatchId && page === 'select') {
-      const opp = players.find(p => p.id === activeOpponentId);
-      if (opp) {
-        setOpponent(opp);
-        setCurrentMatchId(activeMatchId);
-        setPage('match');
-      }
-    }
-  }, [activeMatchId, activeOpponentId, players, page]);
+    if (!activeMatchId || !activeOpponentId) return;
+    if (page === 'match' && currentMatchId === activeMatchId) return;
+
+    void openSharedMatch(activeMatchId, activeOpponentId);
+  }, [activeMatchId, activeOpponentId, currentMatchId, openSharedMatch, page]);
 
   // Watch outgoing accepted requests to auto-navigate challenger into match
   useEffect(() => {
-    const accepted = outgoing.find(r => r.status === 'accepted' && r.match_id);
-    if (!accepted || page !== 'select') return;
+    const accepted = outgoing.find((request) => request.status === 'accepted' && request.match_id);
+    if (!accepted || currentMatchId === accepted.match_id) return;
 
     const validateAndOpen = async () => {
-      const { data } = await (await import('@/integrations/supabase/client')).supabase
+      const { data } = await supabase
         .from('matches')
-        .select('id, status')
+        .select('id, status, completed_at')
         .eq('id', accepted.match_id!)
-        .single();
+        .maybeSingle();
 
-      if (data?.status !== 'active') return;
+      if (data?.status !== 'active' || data.completed_at) return;
 
-      const opp = players.find(p => p.id === accepted.to_profile_id);
-      if (opp) {
-        setOpponent(opp);
-        setCurrentMatchId(accepted.match_id!);
-        setPage('match');
-      }
+      await openSharedMatch(accepted.match_id!, accepted.to_profile_id);
     };
 
     void validateAndOpen();
-  }, [outgoing, players, page]);
+  }, [outgoing, currentMatchId, openSharedMatch]);
 
   const handleSelectOpponent = useCallback(async (player: Tables<'profiles'>) => {
     // For guests, create match directly
-    const { data } = await (await import('@/integrations/supabase/client')).supabase
+    const { data } = await supabase
       .from('matches')
       .insert({ player1_id: profile!.id, player2_id: player.id, target_score: settings.targetScore, status: 'active' })
       .select('id')
@@ -95,14 +109,10 @@ export default function Index() {
   const handleAcceptRequest = useCallback(async (request: MatchRequest) => {
     const matchId = await respondToRequest(request.id, true);
     if (matchId) {
-      const challenger = players.find(p => p.id === request.from_profile_id);
-      if (challenger) {
-        setOpponent(challenger);
-        setCurrentMatchId(matchId);
-        setPage('match');
-      }
+      await openSharedMatch(matchId, request.from_profile_id);
+      void recheckActive();
     }
-  }, [respondToRequest, players]);
+  }, [respondToRequest, openSharedMatch, recheckActive]);
 
   const handleDeclineRequest = useCallback(async (requestId: string) => {
     await respondToRequest(requestId, false);
