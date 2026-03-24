@@ -106,14 +106,8 @@ export default function ScoreBoard({
 
     setShowWinner(false);
     setPrevScores(null);
-    const { data } = await supabase
-      .from('matches')
-      .insert({ player1_id: playerOne.id, player2_id: playerTwo.id, target_score: match?.targetScore ?? 10, status: 'active' })
-      .select('id')
-      .single();
-    if (data) {
-      onNewMatch();
-    }
+    // Navigate back to lobby so the user can start a fresh match
+    onNewMatch();
   };
 
   const handleNewOpponent = async () => {
