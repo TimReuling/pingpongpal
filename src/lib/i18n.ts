@@ -63,6 +63,13 @@ const translations = {
     noPendingRequests: 'No pending requests',
     matchRequest: 'Match Request',
     startDirectly: 'Play',
+    live: 'LIVE',
+    leaveMatch: 'Leave Match',
+    firstTo: 'First to',
+    matchCancelled: 'Match cancelled',
+    opponentLeft: 'A player left the match',
+    returningToLobby: 'Returning to lobby…',
+    sharedMatch: 'Shared match',
   },
   nl: {
     signIn: 'Inloggen',
@@ -126,6 +133,13 @@ const translations = {
     noPendingRequests: 'Geen verzoeken',
     matchRequest: 'Wedstrijdverzoek',
     startDirectly: 'Spelen',
+    live: 'LIVE',
+    leaveMatch: 'Wedstrijd verlaten',
+    firstTo: 'Eerst tot',
+    matchCancelled: 'Wedstrijd geannuleerd',
+    opponentLeft: 'Een speler heeft de wedstrijd verlaten',
+    returningToLobby: 'Terug naar lobby…',
+    sharedMatch: 'Gedeelde wedstrijd',
   },
 } as const;
 
