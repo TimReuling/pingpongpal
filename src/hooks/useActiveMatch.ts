@@ -1,43 +1,54 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { getOpponentId, hasValidSessionPlayers, isActiveSession } from '@/lib/matchSession';
+import { hasValidSessionPlayers, isActiveSession } from '@/lib/matchSession';
 
-/**
- * Checks for an active (in_progress) match for the current profile
- * and provides a way to resume it.
- */
+export interface ActiveMatchSummary {
+  id: string;
+  playerOneId: string;
+  playerTwoId: string;
+  status: string;
+  completedAt: string | null;
+}
+
+function normalizeActiveMatch(data: {
+  id: string;
+  player1_id: string;
+  player2_id: string;
+  status: string;
+  completed_at: string | null;
+} | null): ActiveMatchSummary | null {
+  if (!data) return null;
+
+  if (
+    !hasValidSessionPlayers({ player1Id: data.player1_id, player2Id: data.player2_id }) ||
+    !isActiveSession({ status: data.status, completedAt: data.completed_at })
+  ) {
+    return null;
+  }
+
+  return {
+    id: data.id,
+    playerOneId: data.player1_id,
+    playerTwoId: data.player2_id,
+    status: data.status,
+    completedAt: data.completed_at,
+  };
+}
+
 export function useActiveMatch(profileId: string | undefined) {
-  const [activeMatchId, setActiveMatchId] = useState<string | null>(null);
-  const [activeOpponentId, setActiveOpponentId] = useState<string | null>(null);
+  const [activeMatch, setActiveMatch] = useState<ActiveMatchSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
   const clearActiveMatch = useCallback(() => {
-    setActiveMatchId(null);
-    setActiveOpponentId(null);
+    setActiveMatch(null);
   }, []);
 
-  const applyActiveMatch = useCallback((data: {
-    id: string;
-    player1_id: string;
-    player2_id: string;
-    status: string;
-    completed_at: string | null;
-  } | null) => {
-    if (
-      data &&
-      hasValidSessionPlayers({ player1Id: data.player1_id, player2Id: data.player2_id }) &&
-      isActiveSession({ status: data.status, completedAt: data.completed_at })
-    ) {
-      setActiveMatchId(data.id);
-      setActiveOpponentId(getOpponentId({ player1Id: data.player1_id, player2Id: data.player2_id }, profileId!));
+  const checkActiveMatch = useCallback(async () => {
+    if (!profileId) {
+      clearActiveMatch();
+      setLoading(false);
       return;
     }
-
-    clearActiveMatch();
-  }, [clearActiveMatch, profileId]);
-
-  const checkActiveMatch = useCallback(async () => {
-    if (!profileId) { setLoading(false); return; }
 
     await supabase.rpc('cleanup_stale_match_sessions', { p_profile_id: profileId });
 
@@ -50,20 +61,19 @@ export function useActiveMatch(profileId: string | undefined) {
       .limit(1)
       .maybeSingle();
 
-    applyActiveMatch(data ?? null);
+    setActiveMatch(normalizeActiveMatch(data ?? null));
     setLoading(false);
-  }, [profileId, applyActiveMatch]);
+  }, [clearActiveMatch, profileId]);
 
   useEffect(() => {
-    checkActiveMatch();
+    void checkActiveMatch();
   }, [checkActiveMatch]);
 
-  // Listen for new matches involving this profile
   useEffect(() => {
     if (!profileId) return;
 
     const channel = supabase
-      .channel('active-match-watch')
+      .channel(`active-match-watch-${profileId}`)
       .on(
         'postgres_changes',
         {
@@ -72,19 +82,24 @@ export function useActiveMatch(profileId: string | undefined) {
           table: 'matches',
         },
         (payload) => {
-          const d = payload.new as any;
-          if (!d) { checkActiveMatch(); return; }
-          if (d.player1_id === profileId || d.player2_id === profileId) {
-            if (
-              hasValidSessionPlayers({ player1Id: d.player1_id, player2Id: d.player2_id }) &&
-              isActiveSession({ status: d.status, completedAt: d.completed_at })
-            ) {
-              applyActiveMatch(d);
-            } else if (['finished', 'declined', 'abandoned', 'cancelled', 'completed', 'in_progress'].includes(d.status)) {
-              if (d.id === activeMatchId) {
-                clearActiveMatch();
-              }
-            }
+          const nextRow = (payload.new ?? null) as {
+            player1_id?: string;
+            player2_id?: string;
+          } | null;
+          const previousRow = (payload.old ?? null) as {
+            player1_id?: string;
+            player2_id?: string;
+          } | null;
+
+          const affectsCurrentProfile = [
+            nextRow?.player1_id,
+            nextRow?.player2_id,
+            previousRow?.player1_id,
+            previousRow?.player2_id,
+          ].includes(profileId);
+
+          if (affectsCurrentProfile) {
+            void checkActiveMatch();
           }
         }
       )
@@ -93,7 +108,13 @@ export function useActiveMatch(profileId: string | undefined) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [profileId, checkActiveMatch, activeMatchId, clearActiveMatch, applyActiveMatch]);
+  }, [checkActiveMatch, profileId]);
 
-  return { activeMatchId, activeOpponentId, loading: loading, recheck: checkActiveMatch, clearActiveMatch };
+  return {
+    activeMatch,
+    activeMatchId: activeMatch?.id ?? null,
+    loading,
+    recheck: checkActiveMatch,
+    clearActiveMatch,
+  };
 }
