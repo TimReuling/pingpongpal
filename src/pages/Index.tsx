@@ -69,6 +69,7 @@ export default function Index() {
   const handleExitMatch = useCallback(() => {
     clearActiveMatch();
     setLiveMatchId(null);
+    handledAcceptedRef.current = null;
     setPage('select');
     void recheckActive();
   }, [clearActiveMatch, recheckActive]);
