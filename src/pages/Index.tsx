@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSettings } from '@/hooks/useAppStore';
 import { usePlayers } from '@/hooks/usePlayers';
@@ -34,9 +34,16 @@ export default function Index() {
     setPage('match');
   }, [activeMatchId]);
 
+  // Track which accepted request we've already handled to avoid re-entering stale matches
+  const handledAcceptedRef = useRef<string | null>(null);
+
   useEffect(() => {
     const accepted = outgoing.find((request) => request.status === 'accepted' && request.match_id);
     if (!accepted?.match_id) return;
+
+    // Skip if we already handled this accepted request
+    if (handledAcceptedRef.current === accepted.id) return;
+    handledAcceptedRef.current = accepted.id;
 
     setLiveMatchId(accepted.match_id);
     setPage('match');
@@ -62,6 +69,7 @@ export default function Index() {
   const handleExitMatch = useCallback(() => {
     clearActiveMatch();
     setLiveMatchId(null);
+    handledAcceptedRef.current = null;
     setPage('select');
     void recheckActive();
   }, [clearActiveMatch, recheckActive]);
