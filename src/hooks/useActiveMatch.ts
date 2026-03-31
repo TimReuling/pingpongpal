@@ -52,10 +52,16 @@ export function useActiveMatch(profileId: string | undefined) {
 
     await supabase.rpc('cleanup_stale_match_sessions', { p_profile_id: profileId });
 
+    // Only restore matches updated within the last 2 hours to avoid stale sessions
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+
     const { data } = await supabase
       .from('matches')
       .select('id, player1_id, player2_id, status, completed_at')
       .eq('status', 'active')
+      .is('completed_at', null)
+      .is('winner_id', null)
+      .gte('updated_at', twoHoursAgo)
       .or(`player1_id.eq.${profileId},player2_id.eq.${profileId}`)
       .order('created_at', { ascending: false })
       .limit(1)
