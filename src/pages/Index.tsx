@@ -34,9 +34,16 @@ export default function Index() {
     setPage('match');
   }, [activeMatchId]);
 
+  // Track which accepted request we've already handled to avoid re-entering stale matches
+  const handledAcceptedRef = useRef<string | null>(null);
+
   useEffect(() => {
     const accepted = outgoing.find((request) => request.status === 'accepted' && request.match_id);
     if (!accepted?.match_id) return;
+
+    // Skip if we already handled this accepted request
+    if (handledAcceptedRef.current === accepted.id) return;
+    handledAcceptedRef.current = accepted.id;
 
     setLiveMatchId(accepted.match_id);
     setPage('match');
