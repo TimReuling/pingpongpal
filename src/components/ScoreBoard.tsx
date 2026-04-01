@@ -53,14 +53,20 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
       const senderId = payload.payload?.senderId;
       const senderName = payload.payload?.senderName;
       if (senderId && senderId !== currentProfileId) {
-        setEndMatchIncoming(senderName || 'Opponent');
+        // If we also requested end, both want out — auto cancel
+        if (endMatchRequestedRef.current) {
+          void handleConfirmedEndRef.current();
+        } else {
+          setEndMatchIncoming(senderName || 'Opponent');
+        }
       }
     });
 
-    channel.on('broadcast', { event: 'end-match-cancel' }, (payload) => {
+    channel.on('broadcast', { event: 'end-match-decline' }, (payload) => {
       const senderId = payload.payload?.senderId;
       if (senderId && senderId !== currentProfileId) {
-        setEndMatchIncoming(null);
+        setEndMatchRequested(false);
+        endMatchRequestedRef.current = false;
       }
     });
 
