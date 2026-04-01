@@ -5,31 +5,31 @@ interface EndMatchRequestProps {
   requesterName: string;
   lang: Lang;
   onAccept: () => void;
-  onDecline: () => void;
+  onTimeout: () => void;
 }
 
 const END_MATCH_TIMEOUT = 10;
 
-export default function EndMatchRequest({ requesterName, lang, onAccept, onDecline }: EndMatchRequestProps) {
+export default function EndMatchRequest({ requesterName, lang, onAccept, onTimeout }: EndMatchRequestProps) {
   const [secondsLeft, setSecondsLeft] = useState(END_MATCH_TIMEOUT);
 
   useEffect(() => {
     if (secondsLeft <= 0) {
-      onDecline();
+      onTimeout();
       return;
     }
     const timer = window.setInterval(() => {
       setSecondsLeft(prev => {
         const next = prev - 1;
         if (next <= 0) {
-          onDecline();
+          onTimeout();
           return 0;
         }
         return next;
       });
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [onDecline, secondsLeft <= 0]);
+  }, [onTimeout, secondsLeft <= 0]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/60 backdrop-blur-sm p-6">
@@ -46,7 +46,9 @@ export default function EndMatchRequest({ requesterName, lang, onAccept, onDecli
               style={{ width: `${(secondsLeft / END_MATCH_TIMEOUT) * 100}%` }}
             />
           </div>
-          <p className="mt-1 text-center text-xs font-bold text-muted-foreground tabular-nums">{secondsLeft}s</p>
+          <p className="mt-1 text-center text-xs font-bold text-muted-foreground tabular-nums">
+            {secondsLeft}s
+          </p>
         </div>
 
         <div className="flex w-full gap-3">
@@ -57,7 +59,7 @@ export default function EndMatchRequest({ requesterName, lang, onAccept, onDecli
             {t('endMatchAccept', lang)}
           </button>
           <button
-            onClick={onDecline}
+            onClick={onTimeout}
             className="flex-1 rounded-2xl bg-muted py-3 font-bold text-muted-foreground active:scale-95"
           >
             {t('endMatchDecline', lang)}
