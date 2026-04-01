@@ -24,11 +24,14 @@ export function useMatchRequests(profileId: string | undefined) {
   const fetchRequests = useCallback(async () => {
     if (!profileId) return;
 
+    // Only fetch challenges from the last 30 seconds (challenge expiration window)
+    const thirtySecondsAgo = new Date(Date.now() - 30 * 1000).toISOString();
     const { data: inData } = await supabase
       .from('match_requests')
       .select('*')
       .eq('to_profile_id', profileId)
       .eq('status', 'pending')
+      .gte('created_at', thirtySecondsAgo)
       .order('created_at', { ascending: false });
 
     // Only fetch recent outgoing requests (last 5 minutes) to avoid picking up stale accepted ones
