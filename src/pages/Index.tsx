@@ -162,6 +162,7 @@ export default function Index() {
         lang={settings.language}
         soundEnabled={settings.soundEnabled}
         onExit={handleExitMatch}
+        onRematch={handleRematch}
       />
     );
   }
