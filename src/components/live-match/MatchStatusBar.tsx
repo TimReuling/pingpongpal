@@ -7,9 +7,13 @@ interface MatchStatusBarProps {
   isInteractive: boolean;
   endMatchPending: boolean;
   onEndMatchRequest: () => void;
+  onForceLeave: () => void;
 }
 
-export default function MatchStatusBar({ lang, targetScore, status, isInteractive, endMatchPending, onEndMatchRequest }: MatchStatusBarProps) {
+export default function MatchStatusBar({
+  lang, targetScore, status, isInteractive,
+  endMatchPending, onEndMatchRequest, onForceLeave,
+}: MatchStatusBarProps) {
   return (
     <div className="safe-top border-b border-border bg-card/95 px-4 py-3 backdrop-blur-sm">
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3">
@@ -25,21 +29,35 @@ export default function MatchStatusBar({ lang, targetScore, status, isInteractiv
           </p>
         </div>
 
-        {isInteractive && (
-          <button
-            onClick={onEndMatchRequest}
-            disabled={endMatchPending}
-            className="rounded-full bg-destructive px-3 py-2 text-xs font-bold text-destructive-foreground transition-transform active:scale-95 disabled:opacity-50"
-          >
-            {endMatchPending ? t('endMatchWaiting', lang) : t('endMatch', lang)}
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {isInteractive && (
+            <>
+              <button
+                onClick={onEndMatchRequest}
+                className="rounded-full bg-destructive px-3 py-2 text-xs font-bold text-destructive-foreground transition-transform active:scale-95"
+              >
+                {endMatchPending ? t('endMatchWaiting', lang) : t('endMatch', lang)}
+              </button>
+              {endMatchPending && (
+                <button
+                  onClick={onForceLeave}
+                  className="rounded-full border border-destructive/50 bg-card px-2.5 py-2 text-[10px] font-bold text-destructive transition-transform active:scale-95"
+                >
+                  ✕
+                </button>
+              )}
+            </>
+          )}
 
-        {!isInteractive && (
-          <div className="px-3 py-2 text-xs font-bold text-muted-foreground">
-            {t('returningToLobby', lang)}
-          </div>
-        )}
+          {!isInteractive && (
+            <button
+              onClick={onForceLeave}
+              className="rounded-full bg-muted px-3 py-2 text-xs font-bold text-muted-foreground transition-transform active:scale-95"
+            >
+              {t('leaveMatch', lang)}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
