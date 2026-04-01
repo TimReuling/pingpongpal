@@ -1,10 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { toast } from 'sonner';
+import confetti from 'canvas-confetti';
+import { supabase } from '@/integrations/supabase/client';
 import { useRealtimeMatch } from '@/hooks/useRealtimeMatch';
 import { playScoreDown, playScoreUp, playServiceChange, playWin } from '@/lib/sounds';
 import { t, type Lang } from '@/lib/i18n';
 import MatchStatusBar from './live-match/MatchStatusBar';
 import PlayerScorePanel from './live-match/PlayerScorePanel';
+import EndMatchRequest from './live-match/EndMatchRequest';
+import RematchPopup from './live-match/RematchPopup';
 
 interface ScoreBoardProps {
   matchId: string;
@@ -12,12 +16,24 @@ interface ScoreBoardProps {
   lang: Lang;
   soundEnabled: boolean;
   onExit: () => void;
+  onRematch?: (playerOneId: string, playerTwoId: string, targetScore: number) => void;
 }
 
-export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabled, onExit }: ScoreBoardProps) {
+export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabled, onExit, onRematch }: ScoreBoardProps) {
   const { match, players, loading, updateScore, cancelMatch } = useRealtimeMatch(matchId, currentProfileId);
   const [prevScores, setPrevScores] = useState<{ playerOneScore: number; playerTwoScore: number } | null>(null);
   const [winnerAcknowledged, setWinnerAcknowledged] = useState(false);
+  const [showWinModal, setShowWinModal] = useState(false);
+
+  // End-match request state
+  const [endMatchRequested, setEndMatchRequested] = useState(false);
+  const [endMatchIncoming, setEndMatchIncoming] = useState<string | null>(null); // requester name
+
+  // Rematch state
+  const [rematchRequested, setRematchRequested] = useState(false);
+  const [rematchIncoming, setRematchIncoming] = useState(false);
+
+  const broadcastChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const winnerName = useMemo(() => {
     if (!match?.winnerId) return null;
@@ -26,6 +42,74 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
     return null;
   }, [match?.winnerId, players.playerOne, players.playerTwo]);
 
+  // Set up broadcast channel for end-match and rematch signaling
+  useEffect(() => {
+    if (!matchId) return;
+
+    const channel = supabase.channel(`match-signals-${matchId}`);
+    broadcastChannelRef.current = channel;
+
+    channel.on('broadcast', { event: 'end-match-request' }, (payload) => {
+      const senderId = payload.payload?.senderId;
+      const senderName = payload.payload?.senderName;
+      if (senderId && senderId !== currentProfileId) {
+        setEndMatchIncoming(senderName || 'Opponent');
+      }
+    });
+
+    channel.on('broadcast', { event: 'end-match-cancel' }, (payload) => {
+      const senderId = payload.payload?.senderId;
+      if (senderId && senderId !== currentProfileId) {
+        setEndMatchIncoming(null);
+      }
+    });
+
+    channel.on('broadcast', { event: 'end-match-accept' }, (payload) => {
+      const senderId = payload.payload?.senderId;
+      if (senderId && senderId !== currentProfileId) {
+        // Other player accepted our end request
+        void handleConfirmedEnd();
+      }
+    });
+
+    channel.on('broadcast', { event: 'rematch-request' }, (payload) => {
+      const senderId = payload.payload?.senderId;
+      if (senderId && senderId !== currentProfileId) {
+        setRematchIncoming(true);
+      }
+    });
+
+    channel.on('broadcast', { event: 'rematch-accept' }, (payload) => {
+      const senderId = payload.payload?.senderId;
+      const newMatchId = payload.payload?.newMatchId;
+      if (senderId && senderId !== currentProfileId && newMatchId) {
+        // Other player created the rematch - we should also navigate
+        onRematch?.(
+          payload.payload.playerOneId,
+          payload.payload.playerTwoId,
+          payload.payload.targetScore
+        );
+      }
+    });
+
+    channel.on('broadcast', { event: 'rematch-decline' }, (payload) => {
+      const senderId = payload.payload?.senderId;
+      if (senderId && senderId !== currentProfileId) {
+        setRematchRequested(false);
+        toast.info('Opponent declined rematch');
+        setTimeout(onExit, 1500);
+      }
+    });
+
+    channel.subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+      broadcastChannelRef.current = null;
+    };
+  }, [matchId, currentProfileId]);
+
+  // Sound effects
   useEffect(() => {
     if (!match || !soundEnabled) return;
 
@@ -46,41 +130,126 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
       playScoreDown();
     }
 
-    if (match.server !== (playerOneDiff !== 0 || playerTwoDiff !== 0 ? match.server : match.server)) {
-      playServiceChange();
-    }
-
     setPrevScores({
       playerOneScore: match.playerOneScore,
       playerTwoScore: match.playerTwoScore,
     });
   }, [match, prevScores, soundEnabled]);
 
+  // Win detection with confetti
   useEffect(() => {
     if (!match) return;
 
     if (match.status === 'finished' && match.winnerId && !winnerAcknowledged) {
       setWinnerAcknowledged(true);
+      setShowWinModal(true);
+
       if (soundEnabled) playWin();
-      toast.success(`${winnerName ?? t('winner', lang)} ${t('won', lang)}`);
 
-      const timer = window.setTimeout(() => {
-        onExit();
-      }, 2500);
-
-      return () => window.clearTimeout(timer);
+      // Fire confetti
+      const duration = 2500;
+      const end = Date.now() + duration;
+      const frame = () => {
+        confetti({ particleCount: 3, angle: 60, spread: 55, origin: { x: 0, y: 0.7 }, colors: ['#22c55e', '#facc15', '#f97316'] });
+        confetti({ particleCount: 3, angle: 120, spread: 55, origin: { x: 1, y: 0.7 }, colors: ['#22c55e', '#facc15', '#f97316'] });
+        if (Date.now() < end) requestAnimationFrame(frame);
+      };
+      frame();
     }
 
     if ((match.status === 'cancelled' || match.status === 'abandoned') && !winnerAcknowledged) {
       setWinnerAcknowledged(true);
       toast.info(t('opponentLeft', lang));
-      const timer = window.setTimeout(() => {
-        onExit();
-      }, 1200);
-
+      const timer = window.setTimeout(() => onExit(), 1500);
       return () => window.clearTimeout(timer);
     }
-  }, [lang, match, onExit, soundEnabled, winnerAcknowledged, winnerName]);
+  }, [lang, match, onExit, soundEnabled, winnerAcknowledged]);
+
+  const handleConfirmedEnd = useCallback(async () => {
+    setEndMatchRequested(false);
+    setEndMatchIncoming(null);
+    await cancelMatch();
+    onExit();
+  }, [cancelMatch, onExit]);
+
+  const handleEndMatchRequest = useCallback(() => {
+    setEndMatchRequested(true);
+    const myName = match?.playerOneId === currentProfileId
+      ? players.playerOne?.display_name
+      : players.playerTwo?.display_name;
+
+    broadcastChannelRef.current?.send({
+      type: 'broadcast',
+      event: 'end-match-request',
+      payload: { senderId: currentProfileId, senderName: myName ?? 'Player' },
+    });
+  }, [currentProfileId, match, players]);
+
+  const handleAcceptEnd = useCallback(() => {
+    setEndMatchIncoming(null);
+    broadcastChannelRef.current?.send({
+      type: 'broadcast',
+      event: 'end-match-accept',
+      payload: { senderId: currentProfileId },
+    });
+    void handleConfirmedEnd();
+  }, [currentProfileId, handleConfirmedEnd]);
+
+  const handleDeclineEnd = useCallback(() => {
+    setEndMatchIncoming(null);
+    broadcastChannelRef.current?.send({
+      type: 'broadcast',
+      event: 'end-match-cancel',
+      payload: { senderId: currentProfileId },
+    });
+  }, [currentProfileId]);
+
+  const handleRematchRequest = useCallback(async () => {
+    if (rematchIncoming && match && onRematch) {
+      // Both want rematch - create new match
+      const { data } = await supabase
+        .from('matches')
+        .insert({
+          player1_id: match.playerOneId,
+          player2_id: match.playerTwoId,
+          target_score: match.targetScore,
+          status: 'active',
+        })
+        .select('id')
+        .single();
+
+      if (data) {
+        broadcastChannelRef.current?.send({
+          type: 'broadcast',
+          event: 'rematch-accept',
+          payload: {
+            senderId: currentProfileId,
+            newMatchId: data.id,
+            playerOneId: match.playerOneId,
+            playerTwoId: match.playerTwoId,
+            targetScore: match.targetScore,
+          },
+        });
+        onRematch(match.playerOneId, match.playerTwoId, match.targetScore);
+      }
+    } else {
+      setRematchRequested(true);
+      broadcastChannelRef.current?.send({
+        type: 'broadcast',
+        event: 'rematch-request',
+        payload: { senderId: currentProfileId },
+      });
+    }
+  }, [currentProfileId, match, onRematch, rematchIncoming]);
+
+  const handleDeclineRematch = useCallback(() => {
+    broadcastChannelRef.current?.send({
+      type: 'broadcast',
+      event: 'rematch-decline',
+      payload: { senderId: currentProfileId },
+    });
+    onExit();
+  }, [currentProfileId, onExit]);
 
   const handleScore = useCallback(async (side: 'playerOne' | 'playerTwo', delta: 1 | -1) => {
     if (!match || match.status !== 'active') return;
@@ -92,11 +261,6 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
       window.setTimeout(() => playServiceChange(), 100);
     }
   }, [match, soundEnabled, updateScore]);
-
-  const handleLeave = useCallback(async () => {
-    await cancelMatch();
-    onExit();
-  }, [cancelMatch, onExit]);
 
   if (loading || !match || !players.playerOne || !players.playerTwo) {
     return (
@@ -118,7 +282,8 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
         targetScore={match.targetScore}
         status={match.status}
         isInteractive={isInteractive}
-        onLeave={handleLeave}
+        endMatchPending={endMatchRequested}
+        onEndMatchRequest={handleEndMatchRequest}
       />
 
       <main className="flex flex-1 flex-col gap-3 p-3 md:p-4">
@@ -149,9 +314,9 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
         <div className="safe-bottom rounded-[1.75rem] border border-border bg-card px-4 py-3 text-center shadow-sm">
           <p className="text-sm font-semibold text-foreground">
             {winnerName && match.status === 'finished'
-              ? `${winnerName} ${t('won', lang)}`
+              ? `🏆 ${winnerName} ${t('won', lang)}`
               : isInteractive
-                ? `${t('firstTo', lang)} ${match.targetScore} · ${t('service', lang)} ${match.server === 1 ? 'Player One' : 'Player Two'}`
+                ? `${t('firstTo', lang)} ${match.targetScore} · ${t('service', lang)} ${match.server === 1 ? players.playerOne.display_name : players.playerTwo.display_name}`
                 : t('returningToLobby', lang)}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -159,6 +324,46 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
           </p>
         </div>
       </main>
+
+      {/* End match request popup */}
+      {endMatchIncoming && (
+        <EndMatchRequest
+          requesterName={endMatchIncoming}
+          lang={lang}
+          onAccept={handleAcceptEnd}
+          onDecline={handleDeclineEnd}
+        />
+      )}
+
+      {/* Win modal with rematch */}
+      {showWinModal && winnerName && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/60 backdrop-blur-sm p-6">
+          <div className="flex w-full max-w-sm flex-col items-center gap-6 rounded-3xl bg-card p-8 shadow-2xl animate-in zoom-in-95">
+            <div className="text-6xl">🏆</div>
+            <h2 className="text-3xl font-black text-card-foreground">{winnerName}</h2>
+            <p className="text-xl font-bold text-primary">{t('winner', lang)}</p>
+            <p className="score-font text-2xl font-bold text-muted-foreground">
+              {match.playerOneScore} - {match.playerTwoScore}
+            </p>
+
+            {onRematch ? (
+              <RematchPopup
+                lang={lang}
+                waitingForOpponent={rematchRequested && !rematchIncoming}
+                onRematch={handleRematchRequest}
+                onExit={handleDeclineRematch}
+              />
+            ) : (
+              <button
+                onClick={onExit}
+                className="w-full rounded-2xl bg-muted py-3 font-semibold text-muted-foreground transition-all active:scale-95"
+              >
+                {t('newMatch', lang)}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
