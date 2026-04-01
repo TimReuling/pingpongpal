@@ -19,6 +19,8 @@ interface ScoreBoardProps {
   onRematch?: (playerOneId: string, playerTwoId: string, targetScore: number) => void;
 }
 
+const END_REQUEST_TIMEOUT_MS = 10_000;
+
 export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabled, onExit, onRematch }: ScoreBoardProps) {
   const { match, players, loading, updateScore, cancelMatch } = useRealtimeMatch(matchId, currentProfileId);
   const [prevScores, setPrevScores] = useState<{ playerOneScore: number; playerTwoScore: number } | null>(null);
@@ -27,13 +29,16 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
 
   // End-match request state
   const [endMatchRequested, setEndMatchRequested] = useState(false);
-  const [endMatchIncoming, setEndMatchIncoming] = useState<string | null>(null); // requester name
+  const [endMatchIncoming, setEndMatchIncoming] = useState<string | null>(null);
+  const endMatchRequestedRef = useRef(false);
+  const endRequestTimeoutRef = useRef<number | null>(null);
 
   // Rematch state
   const [rematchRequested, setRematchRequested] = useState(false);
   const [rematchIncoming, setRematchIncoming] = useState(false);
 
   const broadcastChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const handleConfirmedEndRef = useRef<() => Promise<void>>();
 
   const winnerName = useMemo(() => {
     if (!match?.winnerId) return null;
@@ -42,7 +47,38 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
     return null;
   }, [match?.winnerId, players.playerOne, players.playerTwo]);
 
-  // Set up broadcast channel for end-match and rematch signaling
+  // Confirmed end handler
+  const handleConfirmedEnd = useCallback(async () => {
+    setEndMatchRequested(false);
+    endMatchRequestedRef.current = false;
+    setEndMatchIncoming(null);
+    if (endRequestTimeoutRef.current) {
+      window.clearTimeout(endRequestTimeoutRef.current);
+      endRequestTimeoutRef.current = null;
+    }
+    await cancelMatch();
+    onExit();
+  }, [cancelMatch, onExit]);
+
+  // Keep ref in sync
+  useEffect(() => {
+    handleConfirmedEndRef.current = handleConfirmedEnd;
+  }, [handleConfirmedEnd]);
+
+  // Force leave (abandon)
+  const handleForceLeave = useCallback(async () => {
+    setEndMatchRequested(false);
+    endMatchRequestedRef.current = false;
+    setEndMatchIncoming(null);
+    if (endRequestTimeoutRef.current) {
+      window.clearTimeout(endRequestTimeoutRef.current);
+      endRequestTimeoutRef.current = null;
+    }
+    await cancelMatch();
+    onExit();
+  }, [cancelMatch, onExit]);
+
+  // Set up broadcast channel
   useEffect(() => {
     if (!matchId) return;
 
@@ -53,9 +89,9 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
       const senderId = payload.payload?.senderId;
       const senderName = payload.payload?.senderName;
       if (senderId && senderId !== currentProfileId) {
-        // If we also requested end, both want out — auto cancel
+        // If we also requested end, both want out — auto cancel immediately
         if (endMatchRequestedRef.current) {
-          void handleConfirmedEndRef.current();
+          void handleConfirmedEndRef.current?.();
         } else {
           setEndMatchIncoming(senderName || 'Opponent');
         }
@@ -67,14 +103,17 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
       if (senderId && senderId !== currentProfileId) {
         setEndMatchRequested(false);
         endMatchRequestedRef.current = false;
+        if (endRequestTimeoutRef.current) {
+          window.clearTimeout(endRequestTimeoutRef.current);
+          endRequestTimeoutRef.current = null;
+        }
       }
     });
 
     channel.on('broadcast', { event: 'end-match-accept' }, (payload) => {
       const senderId = payload.payload?.senderId;
       if (senderId && senderId !== currentProfileId) {
-        // Other player accepted our end request
-        void handleConfirmedEnd();
+        void handleConfirmedEndRef.current?.();
       }
     });
 
@@ -89,7 +128,6 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
       const senderId = payload.payload?.senderId;
       const newMatchId = payload.payload?.newMatchId;
       if (senderId && senderId !== currentProfileId && newMatchId) {
-        // Other player created the rematch - we should also navigate
         onRematch?.(
           payload.payload.playerOneId,
           payload.payload.playerTwoId,
@@ -152,7 +190,6 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
 
       if (soundEnabled) playWin();
 
-      // Fire confetti
       const duration = 2500;
       const end = Date.now() + duration;
       const frame = () => {
@@ -171,15 +208,17 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
     }
   }, [lang, match, onExit, soundEnabled, winnerAcknowledged]);
 
-  const handleConfirmedEnd = useCallback(async () => {
-    setEndMatchRequested(false);
-    setEndMatchIncoming(null);
-    await cancelMatch();
-    onExit();
-  }, [cancelMatch, onExit]);
-
+  // Request end match — starts 10s timeout, after which we force cancel
   const handleEndMatchRequest = useCallback(() => {
+    if (endMatchRequestedRef.current) {
+      // Already requested — pressing again force-leaves
+      void handleForceLeave();
+      return;
+    }
+
     setEndMatchRequested(true);
+    endMatchRequestedRef.current = true;
+
     const myName = match?.playerOneId === currentProfileId
       ? players.playerOne?.display_name
       : players.playerTwo?.display_name;
@@ -189,7 +228,12 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
       event: 'end-match-request',
       payload: { senderId: currentProfileId, senderName: myName ?? 'Player' },
     });
-  }, [currentProfileId, match, players]);
+
+    // Auto-cancel after 10 seconds if no response
+    endRequestTimeoutRef.current = window.setTimeout(() => {
+      void handleConfirmedEndRef.current?.();
+    }, END_REQUEST_TIMEOUT_MS);
+  }, [currentProfileId, handleForceLeave, match, players]);
 
   const handleAcceptEnd = useCallback(() => {
     setEndMatchIncoming(null);
@@ -205,14 +249,13 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
     setEndMatchIncoming(null);
     broadcastChannelRef.current?.send({
       type: 'broadcast',
-      event: 'end-match-cancel',
+      event: 'end-match-decline',
       payload: { senderId: currentProfileId },
     });
   }, [currentProfileId]);
 
   const handleRematchRequest = useCallback(async () => {
     if (rematchIncoming && match && onRematch) {
-      // Both want rematch - create new match
       const { data } = await supabase
         .from('matches')
         .insert({
@@ -268,6 +311,15 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
     }
   }, [match, soundEnabled, updateScore]);
 
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (endRequestTimeoutRef.current) {
+        window.clearTimeout(endRequestTimeoutRef.current);
+      }
+    };
+  }, []);
+
   if (loading || !match || !players.playerOne || !players.playerTwo) {
     return (
       <div className="flex min-h-dvh items-center justify-center bg-background px-6">
@@ -290,6 +342,7 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
         isInteractive={isInteractive}
         endMatchPending={endMatchRequested}
         onEndMatchRequest={handleEndMatchRequest}
+        onForceLeave={handleForceLeave}
       />
 
       <main className="flex flex-1 flex-col gap-3 p-3 md:p-4">
@@ -331,13 +384,13 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
         </div>
       </main>
 
-      {/* End match request popup */}
+      {/* End match request popup (shown to the OTHER player) */}
       {endMatchIncoming && (
         <EndMatchRequest
           requesterName={endMatchIncoming}
           lang={lang}
           onAccept={handleAcceptEnd}
-          onDecline={handleDeclineEnd}
+          onTimeout={handleAcceptEnd}
         />
       )}
 
