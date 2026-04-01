@@ -74,6 +74,21 @@ export default function Index() {
     void recheckActive();
   }, [clearActiveMatch, recheckActive]);
 
+  const handleRematch = useCallback(async (playerOneId: string, playerTwoId: string, targetScore: number) => {
+    // Create a new match session for rematch
+    const { data } = await supabase
+      .from('matches')
+      .insert({ player1_id: playerOneId, player2_id: playerTwoId, target_score: targetScore, status: 'active' })
+      .select('id')
+      .single();
+
+    if (data) {
+      setLiveMatchId(data.id);
+      setPage('match');
+      void recheckActive();
+    }
+  }, [recheckActive]);
+
   const handleSendChallenge = useCallback(async (player: Tables<'profiles'>) => {
     await sendRequest(player.id, settings.targetScore);
     toast.success(t('challengeSent', settings.language));
@@ -147,6 +162,7 @@ export default function Index() {
         lang={settings.language}
         soundEnabled={settings.soundEnabled}
         onExit={handleExitMatch}
+        onRematch={handleRematch}
       />
     );
   }
