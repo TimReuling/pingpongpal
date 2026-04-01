@@ -149,6 +149,15 @@ const translations = {
     opponentLeft: 'Een speler heeft de wedstrijd verlaten',
     returningToLobby: 'Terug naar lobby…',
     sharedMatch: 'Gedeelde wedstrijd',
+    endMatch: 'Wedstrijd beëindigen',
+    endMatchRequest: 'wil de wedstrijd beëindigen',
+    endMatchAccept: 'Accepteren',
+    endMatchDecline: 'Doorgaan',
+    endMatchWaiting: 'Wachten op tegenstander…',
+    endMatchExpired: 'Verzoek verlopen',
+    rematch: 'Rematch',
+    challengeExpired: 'Uitdaging verlopen',
+    expiresIn: 'verloopt in',
   },
 } as const;
 
