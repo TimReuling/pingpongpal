@@ -5,31 +5,34 @@ interface EndMatchRequestProps {
   requesterName: string;
   lang: Lang;
   onAccept: () => void;
+  onDecline: () => void;
   onTimeout: () => void;
 }
 
 const END_MATCH_TIMEOUT = 10;
 
-export default function EndMatchRequest({ requesterName, lang, onAccept, onTimeout }: EndMatchRequestProps) {
+export default function EndMatchRequest({ requesterName, lang, onAccept, onDecline, onTimeout }: EndMatchRequestProps) {
   const [secondsLeft, setSecondsLeft] = useState(END_MATCH_TIMEOUT);
 
   useEffect(() => {
-    if (secondsLeft <= 0) {
-      onTimeout();
-      return;
-    }
+    setSecondsLeft(END_MATCH_TIMEOUT);
+
+    const deadline = Date.now() + END_MATCH_TIMEOUT * 1000;
+    let hasTimedOut = false;
+
     const timer = window.setInterval(() => {
-      setSecondsLeft(prev => {
-        const next = prev - 1;
-        if (next <= 0) {
-          onTimeout();
-          return 0;
-        }
-        return next;
-      });
-    }, 1000);
+      const next = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+      setSecondsLeft(next);
+
+      if (next === 0 && !hasTimedOut) {
+        hasTimedOut = true;
+        window.clearInterval(timer);
+        onTimeout();
+      }
+    }, 250);
+
     return () => window.clearInterval(timer);
-  }, [onTimeout, secondsLeft <= 0]);
+  }, [onTimeout, requesterName]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/60 backdrop-blur-sm p-6">
@@ -59,7 +62,7 @@ export default function EndMatchRequest({ requesterName, lang, onAccept, onTimeo
             {t('endMatchAccept', lang)}
           </button>
           <button
-            onClick={onTimeout}
+            onClick={onDecline}
             className="flex-1 rounded-2xl bg-muted py-3 font-bold text-muted-foreground active:scale-95"
           >
             {t('endMatchDecline', lang)}

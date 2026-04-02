@@ -7,7 +7,7 @@ export interface MatchState {
   winner: 1 | 2 | null;
 }
 
-export function getInitialMatchState(targetScore: number = 10, firstServer: 1 | 2 = 1): MatchState {
+export function getInitialMatchState(targetScore: number = 11, firstServer: 1 | 2 = 1): MatchState {
   return {
     player1Score: 0,
     player2Score: 0,
