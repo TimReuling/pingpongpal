@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { hasValidSessionPlayers, isActiveSession } from '@/lib/matchSession';
+import { canRestoreSession, debugMatchEvent, normalizeSessionStatus } from '@/lib/matchSession';
 
 export interface ActiveMatchSummary {
   id: string;
@@ -14,15 +14,24 @@ function normalizeActiveMatch(data: {
   id: string;
   player1_id: string;
   player2_id: string;
+  player1_score: number;
+  player2_score: number;
   status: string;
   completed_at: string | null;
+  winner_id: string | null;
 } | null): ActiveMatchSummary | null {
   if (!data) return null;
 
-  if (
-    !hasValidSessionPlayers({ player1Id: data.player1_id, player2Id: data.player2_id }) ||
-    !isActiveSession({ status: data.status, completedAt: data.completed_at })
-  ) {
+  if (!canRestoreSession({
+    player1Id: data.player1_id,
+    player2Id: data.player2_id,
+    status: data.status,
+    completedAt: data.completed_at,
+    winnerId: data.winner_id,
+    player1Score: data.player1_score,
+    player2Score: data.player2_score,
+  })) {
+    debugMatchEvent('restore rejected for non-restorable session', data);
     return null;
   }
 
@@ -30,7 +39,7 @@ function normalizeActiveMatch(data: {
     id: data.id,
     playerOneId: data.player1_id,
     playerTwoId: data.player2_id,
-    status: data.status,
+    status: normalizeSessionStatus(data.status) ?? data.status,
     completedAt: data.completed_at,
   };
 }
@@ -45,30 +54,49 @@ export function useActiveMatch(profileId: string | undefined) {
 
   const checkActiveMatch = useCallback(async () => {
     if (!profileId) {
+      debugMatchEvent('restore skipped without profile', null);
       clearActiveMatch();
       setLoading(false);
       return;
     }
 
-    await supabase.rpc('cleanup_stale_match_sessions', { p_profile_id: profileId });
+    try {
+      debugMatchEvent('restore check started', { profileId });
+      await supabase.rpc('cleanup_stale_match_sessions', { p_profile_id: profileId });
 
-    // Only restore matches updated within the last 2 hours to avoid stale sessions
-    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+      const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
 
-    const { data } = await supabase
-      .from('matches')
-      .select('id, player1_id, player2_id, status, completed_at')
-      .eq('status', 'active')
-      .is('completed_at', null)
-      .is('winner_id', null)
-      .gte('updated_at', twoHoursAgo)
-      .or(`player1_id.eq.${profileId},player2_id.eq.${profileId}`)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      const { data, error } = await supabase
+        .from('matches')
+        .select('id, player1_id, player2_id, player1_score, player2_score, status, completed_at, winner_id')
+        .eq('status', 'active')
+        .is('completed_at', null)
+        .is('winner_id', null)
+        .gte('updated_at', twoHoursAgo)
+        .or(`player1_id.eq.${profileId},player2_id.eq.${profileId}`)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-    setActiveMatch(normalizeActiveMatch(data ?? null));
-    setLoading(false);
+      if (error) {
+        console.error('Failed to restore active match session', error);
+        clearActiveMatch();
+        return;
+      }
+
+      const nextActiveMatch = normalizeActiveMatch(data ?? null);
+      debugMatchEvent('restore check resolved', {
+        profileId,
+        restoredMatchId: nextActiveMatch?.id ?? null,
+        restoredStatus: nextActiveMatch?.status ?? null,
+      });
+      setActiveMatch(nextActiveMatch);
+    } catch (error) {
+      console.error('Unexpected error while checking active match session', error);
+      clearActiveMatch();
+    } finally {
+      setLoading(false);
+    }
   }, [clearActiveMatch, profileId]);
 
   useEffect(() => {
@@ -105,6 +133,10 @@ export function useActiveMatch(profileId: string | undefined) {
           ].includes(profileId);
 
           if (affectsCurrentProfile) {
+            debugMatchEvent('restore recheck triggered by realtime sync', {
+              profileId,
+              eventType: payload.eventType,
+            });
             void checkActiveMatch();
           }
         }

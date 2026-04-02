@@ -1,10 +1,11 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSettings } from '@/hooks/useAppStore';
 import { usePlayers } from '@/hooks/usePlayers';
 import { useMatchRequests, type MatchRequest } from '@/hooks/useMatchRequests';
 import { usePlayerStats } from '@/hooks/usePlayerStats';
 import { useActiveMatch } from '@/hooks/useActiveMatch';
+import { debugMatchEvent } from '@/lib/matchSession';
 import LoginScreen from '@/components/LoginScreen';
 import OpponentSelect from '@/components/OpponentSelect';
 import ScoreBoard from '@/components/ScoreBoard';
@@ -22,36 +23,31 @@ export default function Index() {
   const { user, profile, loading, signOut, setProfile } = useAuth();
   const { settings, updateSetting } = useAppSettings();
   const { players, addGuest, deleteGuest } = usePlayers(user?.id);
-  const { incoming, outgoing, sendRequest, respondToRequest } = useMatchRequests(profile?.id);
+  const { incoming, sendRequest, respondToRequest } = useMatchRequests(profile?.id);
   const { stats } = usePlayerStats();
-  const { activeMatch, activeMatchId, recheck: recheckActive, clearActiveMatch } = useActiveMatch(profile?.id);
+  const { activeMatchId, recheck: recheckActive, clearActiveMatch } = useActiveMatch(profile?.id);
   const [page, setPage] = useState<Page>('select');
   const [liveMatchId, setLiveMatchId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!activeMatchId) return;
+
+    debugMatchEvent('routing into active match from authoritative session state', {
+      matchId: activeMatchId,
+      profileId: profile?.id ?? null,
+    });
     setLiveMatchId(activeMatchId);
     setPage('match');
-  }, [activeMatchId]);
-
-  // Track which accepted request we've already handled to avoid re-entering stale matches
-  const handledAcceptedRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    const accepted = outgoing.find((request) => request.status === 'accepted' && request.match_id);
-    if (!accepted?.match_id) return;
-
-    // Skip if we already handled this accepted request
-    if (handledAcceptedRef.current === accepted.id) return;
-    handledAcceptedRef.current = accepted.id;
-
-    setLiveMatchId(accepted.match_id);
-    setPage('match');
-    void recheckActive();
-  }, [outgoing, recheckActive]);
+  }, [activeMatchId, profile?.id]);
 
   const handleSelectOpponent = useCallback(async (player: Tables<'profiles'>) => {
     if (!profile) return;
+
+    debugMatchEvent('direct match created', {
+      playerOneId: profile.id,
+      playerTwoId: player.id,
+      targetScore: settings.targetScore,
+    });
 
     const { data } = await supabase
       .from('matches')
@@ -67,15 +63,20 @@ export default function Index() {
   }, [profile, recheckActive, settings.targetScore]);
 
   const handleExitMatch = useCallback(() => {
+    debugMatchEvent('leaving live match screen', { matchId: liveMatchId, profileId: profile?.id ?? null });
     clearActiveMatch();
     setLiveMatchId(null);
-    handledAcceptedRef.current = null;
     setPage('select');
     void recheckActive();
-  }, [clearActiveMatch, recheckActive]);
+  }, [clearActiveMatch, liveMatchId, profile?.id, recheckActive]);
 
   const handleRematch = useCallback(async (playerOneId: string, playerTwoId: string, targetScore: number) => {
-    // Create a new match session for rematch
+    debugMatchEvent('fresh rematch created', {
+      playerOneId,
+      playerTwoId,
+      targetScore,
+    });
+
     const { data } = await supabase
       .from('matches')
       .insert({ player1_id: playerOneId, player2_id: playerTwoId, target_score: targetScore, status: 'active' })
@@ -95,13 +96,14 @@ export default function Index() {
   }, [sendRequest, settings.targetScore, settings.language]);
 
   const handleAcceptRequest = useCallback(async (request: MatchRequest) => {
+    debugMatchEvent('challenge accepted', { requestId: request.id, profileId: profile?.id ?? null });
     const matchId = await respondToRequest(request.id, true);
     if (matchId) {
       setLiveMatchId(matchId);
       setPage('match');
       void recheckActive();
     }
-  }, [recheckActive, respondToRequest]);
+  }, [profile?.id, recheckActive, respondToRequest]);
 
   const handleDeclineRequest = useCallback(async (requestId: string) => {
     await respondToRequest(requestId, false);
@@ -157,6 +159,7 @@ export default function Index() {
   if (page === 'match' && liveMatchId && profile) {
     return (
       <ScoreBoard
+        key={liveMatchId}
         matchId={liveMatchId}
         currentProfileId={profile.id}
         lang={settings.language}

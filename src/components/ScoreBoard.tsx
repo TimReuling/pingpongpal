@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import confetti from 'canvas-confetti';
 import { supabase } from '@/integrations/supabase/client';
 import { useRealtimeMatch } from '@/hooks/useRealtimeMatch';
+import { debugMatchEvent, isCompletedSession, isInteractiveSession, isTerminalSession } from '@/lib/matchSession';
 import { playScoreDown, playScoreUp, playServiceChange, playWin } from '@/lib/sounds';
 import { t, type Lang } from '@/lib/i18n';
 import MatchStatusBar from './live-match/MatchStatusBar';
@@ -40,6 +41,23 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
   const broadcastChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const handleConfirmedEndRef = useRef<() => Promise<void>>();
 
+  useEffect(() => {
+    debugMatchEvent('scoreboard mounted for live session', { matchId, currentProfileId });
+    setPrevScores(null);
+    setWinnerAcknowledged(false);
+    setShowWinModal(false);
+    setEndMatchRequested(false);
+    endMatchRequestedRef.current = false;
+    setEndMatchIncoming(null);
+    setRematchRequested(false);
+    setRematchIncoming(false);
+
+    if (endRequestTimeoutRef.current) {
+      window.clearTimeout(endRequestTimeoutRef.current);
+      endRequestTimeoutRef.current = null;
+    }
+  }, [currentProfileId, matchId]);
+
   const winnerName = useMemo(() => {
     if (!match?.winnerId) return null;
     if (match.winnerId === players.playerOne?.id) return players.playerOne.display_name;
@@ -49,6 +67,7 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
 
   // Confirmed end handler
   const handleConfirmedEnd = useCallback(async () => {
+    debugMatchEvent('session cancellation confirmed', { matchId, profileId: currentProfileId });
     setEndMatchRequested(false);
     endMatchRequestedRef.current = false;
     setEndMatchIncoming(null);
@@ -56,9 +75,9 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
       window.clearTimeout(endRequestTimeoutRef.current);
       endRequestTimeoutRef.current = null;
     }
-    await cancelMatch();
+    await cancelMatch('cancelled');
     onExit();
-  }, [cancelMatch, onExit]);
+  }, [cancelMatch, currentProfileId, matchId, onExit]);
 
   // Keep ref in sync
   useEffect(() => {
@@ -67,6 +86,7 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
 
   // Force leave (abandon)
   const handleForceLeave = useCallback(async () => {
+    debugMatchEvent('force leave requested', { matchId, profileId: currentProfileId });
     setEndMatchRequested(false);
     endMatchRequestedRef.current = false;
     setEndMatchIncoming(null);
@@ -74,9 +94,9 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
       window.clearTimeout(endRequestTimeoutRef.current);
       endRequestTimeoutRef.current = null;
     }
-    await cancelMatch();
+    await cancelMatch('abandoned');
     onExit();
-  }, [cancelMatch, onExit]);
+  }, [cancelMatch, currentProfileId, matchId, onExit]);
 
   // Set up broadcast channel
   useEffect(() => {
@@ -89,6 +109,7 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
       const senderId = payload.payload?.senderId;
       const senderName = payload.payload?.senderName;
       if (senderId && senderId !== currentProfileId) {
+        debugMatchEvent('cancel request received', { matchId, senderId });
         // If we also requested end, both want out — auto cancel immediately
         if (endMatchRequestedRef.current) {
           void handleConfirmedEndRef.current?.();
@@ -101,6 +122,7 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
     channel.on('broadcast', { event: 'end-match-decline' }, (payload) => {
       const senderId = payload.payload?.senderId;
       if (senderId && senderId !== currentProfileId) {
+        debugMatchEvent('cancel request declined', { matchId, senderId });
         setEndMatchRequested(false);
         endMatchRequestedRef.current = false;
         if (endRequestTimeoutRef.current) {
@@ -113,6 +135,7 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
     channel.on('broadcast', { event: 'end-match-accept' }, (payload) => {
       const senderId = payload.payload?.senderId;
       if (senderId && senderId !== currentProfileId) {
+        debugMatchEvent('cancel request accepted', { matchId, senderId });
         void handleConfirmedEndRef.current?.();
       }
     });
@@ -151,7 +174,14 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
       supabase.removeChannel(channel);
       broadcastChannelRef.current = null;
     };
-  }, [matchId, currentProfileId]);
+  }, [currentProfileId, matchId, onExit, onRematch]);
+
+  useEffect(() => {
+    if (!loading && !match) {
+      debugMatchEvent('live scoreboard exiting due to missing session row', { matchId });
+      onExit();
+    }
+  }, [loading, match, matchId, onExit]);
 
   // Sound effects
   useEffect(() => {
@@ -184,8 +214,31 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
   useEffect(() => {
     if (!match) return;
 
-    if (match.status === 'finished' && match.winnerId && !winnerAcknowledged) {
+    if (isTerminalSession(match)) {
+      setEndMatchRequested(false);
+      endMatchRequestedRef.current = false;
+      setEndMatchIncoming(null);
+
+      if (endRequestTimeoutRef.current) {
+        window.clearTimeout(endRequestTimeoutRef.current);
+        endRequestTimeoutRef.current = null;
+      }
+    }
+
+    if (isCompletedSession(match) && !winnerAcknowledged) {
+      debugMatchEvent('session completed', {
+        matchId,
+        winnerId: match.winnerId,
+        scores: [match.playerOneScore, match.playerTwoScore],
+      });
+
       setWinnerAcknowledged(true);
+
+      if (!match.winnerId) {
+        const timer = window.setTimeout(() => onExit(), 1500);
+        return () => window.clearTimeout(timer);
+      }
+
       setShowWinModal(true);
 
       if (soundEnabled) playWin();
@@ -201,15 +254,24 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
     }
 
     if ((match.status === 'cancelled' || match.status === 'abandoned') && !winnerAcknowledged) {
+      debugMatchEvent('session ended without winner', {
+        matchId,
+        status: match.status,
+      });
       setWinnerAcknowledged(true);
-      toast.info(t('opponentLeft', lang));
+      toast.info(match.status === 'abandoned' ? t('opponentLeft', lang) : t('matchCancelled', lang));
       const timer = window.setTimeout(() => onExit(), 1500);
       return () => window.clearTimeout(timer);
     }
-  }, [lang, match, onExit, soundEnabled, winnerAcknowledged]);
+  }, [lang, match, matchId, onExit, soundEnabled, winnerAcknowledged]);
 
   // Request end match — starts 10s timeout, after which we force cancel
   const handleEndMatchRequest = useCallback(() => {
+    if (!match || !isInteractiveSession(match)) {
+      debugMatchEvent('cancel request ignored for non-interactive session', { matchId, status: match?.status ?? null });
+      return;
+    }
+
     if (endMatchRequestedRef.current) {
       // Already requested — pressing again force-leaves
       void handleForceLeave();
@@ -218,6 +280,8 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
 
     setEndMatchRequested(true);
     endMatchRequestedRef.current = true;
+
+    debugMatchEvent('cancel request created', { matchId, profileId: currentProfileId });
 
     const myName = match?.playerOneId === currentProfileId
       ? players.playerOne?.display_name
@@ -230,12 +294,17 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
     });
 
     // Auto-cancel after 10 seconds if no response
+    if (endRequestTimeoutRef.current) {
+      window.clearTimeout(endRequestTimeoutRef.current);
+    }
+
     endRequestTimeoutRef.current = window.setTimeout(() => {
       void handleConfirmedEndRef.current?.();
     }, END_REQUEST_TIMEOUT_MS);
   }, [currentProfileId, handleForceLeave, match, players]);
 
   const handleAcceptEnd = useCallback(() => {
+    debugMatchEvent('cancel request accepted locally', { matchId, profileId: currentProfileId });
     setEndMatchIncoming(null);
     broadcastChannelRef.current?.send({
       type: 'broadcast',
@@ -243,19 +312,21 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
       payload: { senderId: currentProfileId },
     });
     void handleConfirmedEnd();
-  }, [currentProfileId, handleConfirmedEnd]);
+  }, [currentProfileId, handleConfirmedEnd, matchId]);
 
   const handleDeclineEnd = useCallback(() => {
+    debugMatchEvent('cancel request declined locally', { matchId, profileId: currentProfileId });
     setEndMatchIncoming(null);
     broadcastChannelRef.current?.send({
       type: 'broadcast',
       event: 'end-match-decline',
       payload: { senderId: currentProfileId },
     });
-  }, [currentProfileId]);
+  }, [currentProfileId, matchId]);
 
   const handleRematchRequest = useCallback(async () => {
     if (rematchIncoming && match && onRematch) {
+      debugMatchEvent('rematch accepted', { matchId, profileId: currentProfileId });
       const { data } = await supabase
         .from('matches')
         .insert({
@@ -282,6 +353,7 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
         onRematch(match.playerOneId, match.playerTwoId, match.targetScore);
       }
     } else {
+      debugMatchEvent('rematch requested', { matchId, profileId: currentProfileId });
       setRematchRequested(true);
       broadcastChannelRef.current?.send({
         type: 'broadcast',
@@ -292,6 +364,7 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
   }, [currentProfileId, match, onRematch, rematchIncoming]);
 
   const handleDeclineRematch = useCallback(() => {
+    debugMatchEvent('rematch declined', { matchId, profileId: currentProfileId });
     broadcastChannelRef.current?.send({
       type: 'broadcast',
       event: 'rematch-decline',
@@ -301,7 +374,14 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
   }, [currentProfileId, onExit]);
 
   const handleScore = useCallback(async (side: 'playerOne' | 'playerTwo', delta: 1 | -1) => {
-    if (!match || match.status !== 'active') return;
+    if (!match || !isInteractiveSession(match)) return;
+
+    debugMatchEvent('score button pressed', {
+      matchId,
+      side,
+      delta,
+      scores: [match.playerOneScore, match.playerTwoScore],
+    });
 
     const previousServer = match.server;
     const nextState = await updateScore(side, delta);
@@ -309,7 +389,7 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
     if (nextState && soundEnabled && nextState.server !== previousServer && nextState.status === 'active') {
       window.setTimeout(() => playServiceChange(), 100);
     }
-  }, [match, soundEnabled, updateScore]);
+  }, [match, matchId, soundEnabled, updateScore]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -331,7 +411,7 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
     );
   }
 
-  const isInteractive = match.status === 'active';
+  const isInteractive = isInteractiveSession(match);
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">
@@ -390,6 +470,7 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
           requesterName={endMatchIncoming}
           lang={lang}
           onAccept={handleAcceptEnd}
+          onDecline={handleDeclineEnd}
           onTimeout={handleAcceptEnd}
         />
       )}

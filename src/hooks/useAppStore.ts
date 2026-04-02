@@ -10,12 +10,21 @@ interface AppSettings {
 
 const SETTINGS_KEY = 'pingpong-settings';
 
+function normalizeSettings(settings?: Partial<AppSettings> | null): AppSettings {
+  return {
+    targetScore: Math.max(11, Number(settings?.targetScore) || 11),
+    soundEnabled: settings?.soundEnabled ?? true,
+    darkMode: settings?.darkMode ?? false,
+    language: settings?.language === 'nl' ? 'nl' : 'en',
+  };
+}
+
 function loadSettings(): AppSettings {
   try {
     const stored = localStorage.getItem(SETTINGS_KEY);
-    if (stored) return JSON.parse(stored);
+    if (stored) return normalizeSettings(JSON.parse(stored));
   } catch {}
-  return { targetScore: 10, soundEnabled: true, darkMode: false, language: 'en' };
+  return normalizeSettings();
 }
 
 export function useAppSettings() {
@@ -31,7 +40,7 @@ export function useAppSettings() {
   }, [settings]);
 
   const updateSetting = useCallback(<K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
-    setSettings(prev => ({ ...prev, [key]: value }));
+    setSettings(prev => normalizeSettings({ ...prev, [key]: value }));
   }, []);
 
   return { settings, updateSetting };

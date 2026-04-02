@@ -34,14 +34,13 @@ export function useMatchRequests(profileId: string | undefined) {
       .gte('created_at', thirtySecondsAgo)
       .order('created_at', { ascending: false });
 
-    // Only fetch recent outgoing requests (last 5 minutes) to avoid picking up stale accepted ones
-    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    // Keep challenge state separate from live match state.
     const { data: outData } = await supabase
       .from('match_requests')
       .select('*')
       .eq('from_profile_id', profileId)
-      .in('status', ['pending', 'accepted'])
-      .gte('created_at', fiveMinAgo)
+      .eq('status', 'pending')
+      .gte('created_at', thirtySecondsAgo)
       .order('created_at', { ascending: false });
 
     // Enrich with profile names
