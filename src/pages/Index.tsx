@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSettings } from '@/hooks/useAppStore';
 import { usePlayers } from '@/hooks/usePlayers';
@@ -28,17 +28,34 @@ export default function Index() {
   const { activeMatchId, recheck: recheckActive, clearActiveMatch } = useActiveMatch(profile?.id);
   const [page, setPage] = useState<Page>('select');
   const [liveMatchId, setLiveMatchId] = useState<string | null>(null);
+  // Tracks the match ID we most recently intentionally exited so the routing
+  // effect can ignore a stale activeMatchId that arrives after the exit.
+  const lastExitedMatchIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!activeMatchId) return;
 
+    if (activeMatchId === lastExitedMatchIdRef.current) {
+      // Stale detection: checkActiveMatch fired after we already exited this
+      // match. Clear the active-match state and stay on the select screen.
+      debugMatchEvent('ignored stale re-route for recently exited match', {
+        matchId: activeMatchId,
+        profileId: profile?.id ?? null,
+      });
+      clearActiveMatch();
+      return;
+    }
+
+    // Arriving here means it's a genuine new active match (e.g. app restore or
+    // incoming accepted challenge); clear the exit guard and route to it.
+    lastExitedMatchIdRef.current = null;
     debugMatchEvent('routing into active match from authoritative session state', {
       matchId: activeMatchId,
       profileId: profile?.id ?? null,
     });
     setLiveMatchId(activeMatchId);
     setPage('match');
-  }, [activeMatchId, profile?.id]);
+  }, [activeMatchId, clearActiveMatch, profile?.id]);
 
   const handleSelectOpponent = useCallback(async (player: Tables<'profiles'>) => {
     if (!profile) return;
@@ -64,6 +81,7 @@ export default function Index() {
 
   const handleExitMatch = useCallback(() => {
     debugMatchEvent('leaving live match screen', { matchId: liveMatchId, profileId: profile?.id ?? null });
+    lastExitedMatchIdRef.current = liveMatchId;
     clearActiveMatch();
     setLiveMatchId(null);
     setPage('select');
