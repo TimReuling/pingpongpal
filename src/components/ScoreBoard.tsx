@@ -452,7 +452,7 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
 
         <div className="safe-bottom rounded-[1.75rem] border border-border bg-card px-4 py-3 text-center shadow-sm">
           <p className="text-sm font-semibold text-foreground">
-            {winnerName && match.status === 'finished'
+            {winnerName && isCompletedSession(match)
               ? `🏆 ${winnerName} ${t('won', lang)}`
               : isInteractive
                 ? `${t('firstTo', lang)} ${match.targetScore} · ${t('service', lang)} ${match.server === 1 ? players.playerOne.display_name : players.playerTwo.display_name}`
