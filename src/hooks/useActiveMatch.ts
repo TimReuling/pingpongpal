@@ -47,8 +47,12 @@ function normalizeActiveMatch(data: {
 export function useActiveMatch(profileId: string | undefined) {
   const [activeMatch, setActiveMatch] = useState<ActiveMatchSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  // Ref mirrors activeMatch.id so the realtime subscription can read it without
+  // capturing a stale closure over the state value.
+  const activeMatchIdRef = useRef<string | null>(null);
 
   const clearActiveMatch = useCallback(() => {
+    activeMatchIdRef.current = null;
     setActiveMatch(null);
   }, []);
 
@@ -90,6 +94,7 @@ export function useActiveMatch(profileId: string | undefined) {
         restoredMatchId: nextActiveMatch?.id ?? null,
         restoredStatus: nextActiveMatch?.status ?? null,
       });
+      activeMatchIdRef.current = nextActiveMatch?.id ?? null;
       setActiveMatch(nextActiveMatch);
     } catch (error) {
       console.error('Unexpected error while checking active match session', error);
@@ -133,11 +138,32 @@ export function useActiveMatch(profileId: string | undefined) {
           ].includes(profileId);
 
           if (affectsCurrentProfile) {
-            debugMatchEvent('restore recheck triggered by realtime sync', {
-              profileId,
-              eventType: payload.eventType,
-            });
-            void checkActiveMatch();
+            const incomingId = (nextRow as any)?.id as string | undefined;
+            const incomingStatus = (nextRow as any)?.status as string | undefined;
+
+            // When the match we're currently tracking explicitly transitions to a
+            // non-active status, clear immediately rather than doing a DB round-trip.
+            // This eliminates the read-after-write race where checkActiveMatch() could
+            // briefly still see the row as active and re-route the user back.
+            if (
+              incomingId &&
+              incomingId === activeMatchIdRef.current &&
+              incomingStatus &&
+              incomingStatus !== 'active'
+            ) {
+              debugMatchEvent('restore cleared by direct status observation', {
+                profileId,
+                matchId: incomingId,
+                incomingStatus,
+              });
+              clearActiveMatch();
+            } else {
+              debugMatchEvent('restore recheck triggered by realtime sync', {
+                profileId,
+                eventType: payload.eventType,
+              });
+              void checkActiveMatch();
+            }
           }
         }
       )
