@@ -67,8 +67,7 @@ export default function Index() {
     clearActiveMatch();
     setLiveMatchId(null);
     setPage('select');
-    void recheckActive();
-  }, [clearActiveMatch, liveMatchId, profile?.id, recheckActive]);
+  }, [clearActiveMatch, liveMatchId, profile?.id]);
 
   const handleRematch = useCallback(async (playerOneId: string, playerTwoId: string, targetScore: number) => {
     debugMatchEvent('fresh rematch created', {

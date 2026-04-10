@@ -12,7 +12,7 @@ const SETTINGS_KEY = 'pingpong-settings';
 
 function normalizeSettings(settings?: Partial<AppSettings> | null): AppSettings {
   return {
-    targetScore: Math.max(11, Number(settings?.targetScore) || 11),
+    targetScore: Math.max(7, Number(settings?.targetScore) || 11),
     soundEnabled: settings?.soundEnabled ?? true,
     darkMode: settings?.darkMode ?? false,
     language: settings?.language === 'nl' ? 'nl' : 'en',
