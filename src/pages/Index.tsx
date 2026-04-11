@@ -66,14 +66,17 @@ export default function Index() {
       targetScore: settings.targetScore,
     });
 
-    const { data } = await supabase
-      .from('matches')
-      .insert({ player1_id: profile.id, player2_id: player.id, target_score: settings.targetScore, status: 'active' })
-      .select('id')
-      .single();
+    // Use create_match_session RPC which abandons any existing active session
+    // between these players first, then creates a fresh one. A bare INSERT
+    // would fail silently on the unique-constraint if a stale session existed.
+    const { data: matchId, error } = await supabase.rpc('create_match_session', {
+      p_player1_id: profile.id,
+      p_player2_id: player.id,
+      p_target_score: settings.targetScore,
+    });
 
-    if (data) {
-      setLiveMatchId(data.id);
+    if (matchId && !error) {
+      setLiveMatchId(matchId);
       setPage('match');
       void recheckActive();
     }
@@ -87,21 +90,33 @@ export default function Index() {
     setPage('select');
   }, [clearActiveMatch, liveMatchId, profile?.id]);
 
-  const handleRematch = useCallback(async (playerOneId: string, playerTwoId: string, targetScore: number) => {
-    debugMatchEvent('fresh rematch created', {
-      playerOneId,
-      playerTwoId,
-      targetScore,
+  const handleRematch = useCallback(async (
+    playerOneId: string,
+    playerTwoId: string,
+    targetScore: number,
+    existingMatchId?: string | null,
+  ) => {
+    // When the opponent already created the rematch session and broadcast its ID,
+    // just navigate to it — don't create a second session which would either
+    // fail on the unique-constraint or clobber the first one.
+    if (existingMatchId) {
+      debugMatchEvent('joining rematch created by opponent', { matchId: existingMatchId });
+      setLiveMatchId(existingMatchId);
+      setPage('match');
+      void recheckActive();
+      return;
+    }
+
+    debugMatchEvent('fresh rematch created', { playerOneId, playerTwoId, targetScore });
+
+    const { data: matchId, error } = await supabase.rpc('create_match_session', {
+      p_player1_id: playerOneId,
+      p_player2_id: playerTwoId,
+      p_target_score: targetScore,
     });
 
-    const { data } = await supabase
-      .from('matches')
-      .insert({ player1_id: playerOneId, player2_id: playerTwoId, target_score: targetScore, status: 'active' })
-      .select('id')
-      .single();
-
-    if (data) {
-      setLiveMatchId(data.id);
+    if (matchId && !error) {
+      setLiveMatchId(matchId);
       setPage('match');
       void recheckActive();
     }
