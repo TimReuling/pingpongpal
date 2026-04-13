@@ -17,7 +17,10 @@ interface ScoreBoardProps {
   lang: Lang;
   soundEnabled: boolean;
   onExit: () => void;
-  onRematch?: (playerOneId: string, playerTwoId: string, targetScore: number) => void;
+  // existingMatchId is passed when the rematch session was already created
+  // by the accepting player, so the requester joins it directly instead of
+  // creating a duplicate session.
+  onRematch?: (playerOneId: string, playerTwoId: string, targetScore: number, existingMatchId?: string | null) => void;
 }
 
 const END_REQUEST_TIMEOUT_MS = 10_000;
@@ -151,10 +154,13 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
       const senderId = payload.payload?.senderId;
       const newMatchId = payload.payload?.newMatchId;
       if (senderId && senderId !== currentProfileId && newMatchId) {
+        // Pass the already-created match ID so the requester joins the
+        // session the acceptor created rather than creating a second one.
         onRematch?.(
           payload.payload.playerOneId,
           payload.payload.playerTwoId,
-          payload.payload.targetScore
+          payload.payload.targetScore,
+          newMatchId,
         );
       }
     });
@@ -327,30 +333,29 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
   const handleRematchRequest = useCallback(async () => {
     if (rematchIncoming && match && onRematch) {
       debugMatchEvent('rematch accepted', { matchId, profileId: currentProfileId });
-      const { data } = await supabase
-        .from('matches')
-        .insert({
-          player1_id: match.playerOneId,
-          player2_id: match.playerTwoId,
-          target_score: match.targetScore,
-          status: 'active',
-        })
-        .select('id')
-        .single();
 
-      if (data) {
+      // Use create_match_session RPC: abandons any leftover active session
+      // between these players, then creates a fresh one atomically.
+      const { data: newMatchId, error } = await supabase.rpc('create_match_session', {
+        p_player1_id: match.playerOneId,
+        p_player2_id: match.playerTwoId,
+        p_target_score: match.targetScore,
+      });
+
+      if (newMatchId && !error) {
         broadcastChannelRef.current?.send({
           type: 'broadcast',
           event: 'rematch-accept',
           payload: {
             senderId: currentProfileId,
-            newMatchId: data.id,
+            newMatchId,
             playerOneId: match.playerOneId,
             playerTwoId: match.playerTwoId,
             targetScore: match.targetScore,
           },
         });
-        onRematch(match.playerOneId, match.playerTwoId, match.targetScore);
+        // Pass the already-created match ID so onRematch doesn't create a second one
+        onRematch(match.playerOneId, match.playerTwoId, match.targetScore, newMatchId);
       }
     } else {
       debugMatchEvent('rematch requested', { matchId, profileId: currentProfileId });

@@ -106,34 +106,28 @@ export function useRealtimeMatch(matchId: string | null, currentProfileId?: stri
       computedWinner,
     });
 
+    // Safety net: if we receive an active row whose scores already satisfy
+    // the win condition, the server's update_match_score should have already
+    // finalized the match atomically in a single UPDATE. Re-fetch the
+    // committed state from the database instead of calling finalize again
+    // from the client (which could race with the server's own transaction).
     if (normalizedStatus === 'active' && computedWinner) {
-      debugMatchEvent('forcing completion for winning active row', {
+      debugMatchEvent('stale active row with computed winner – re-fetching authoritative state', {
         matchId: row.id,
         scores: [row.player1_score, row.player2_score],
       });
 
-      const { error } = await supabase.rpc('finalize_match_session', {
-        p_match_id: row.id,
-        p_status: 'finished',
-        p_closed_by_profile_id: currentProfileId ?? null,
-      });
-
-      if (error) {
-        console.error('Failed to finalize winning live match session', error);
-        return row;
-      }
-
-      const { data: finalizedRow } = await supabase
+      const { data: freshRow } = await supabase
         .from('matches')
         .select('*')
         .eq('id', row.id)
         .maybeSingle();
 
-      return finalizedRow ?? row;
+      return freshRow ?? row;
     }
 
     return row;
-  }, [currentProfileId, matchId]);
+  }, [matchId]);
 
   const applyMatchRow = useCallback(async (row: any | null) => {
     const authoritativeRow = await resolveAuthoritativeRow(row);
