@@ -237,6 +237,14 @@ export type Database = {
         }
         Returns: string
       }
+      delete_match_and_recalculate: {
+        Args: { p_match_id: string }
+        Returns: undefined
+      }
+      delete_player_matches: {
+        Args: { p_profile_id: string }
+        Returns: undefined
+      }
       finalize_match_session: {
         Args: {
           p_closed_by_profile_id?: string
@@ -250,6 +258,11 @@ export type Database = {
           winner_id: string
         }[]
       }
+      recalculate_player_stats: {
+        Args: { p_profile_id: string }
+        Returns: undefined
+      }
+      reset_all_stats: { Args: never; Returns: undefined }
       update_match_score: {
         Args: { p_delta: number; p_match_id: string; p_player: number }
         Returns: {
