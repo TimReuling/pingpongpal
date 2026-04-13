@@ -336,12 +336,13 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
 
       // Use create_match_session RPC: abandons any leftover active session
       // between these players, then creates a fresh one atomically.
-      const { data: newMatchId, error } = await supabase.rpc('create_match_session', {
+      const { data, error } = await supabase.rpc('create_match_session', {
         p_player1_id: match.playerOneId,
         p_player2_id: match.playerTwoId,
         p_target_score: match.targetScore,
       });
 
+      const newMatchId = data as unknown as string;
       if (newMatchId && !error) {
         broadcastChannelRef.current?.send({
           type: 'broadcast',
