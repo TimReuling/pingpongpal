@@ -69,12 +69,13 @@ export default function Index() {
     // Use create_match_session RPC which abandons any existing active session
     // between these players first, then creates a fresh one. A bare INSERT
     // would fail silently on the unique-constraint if a stale session existed.
-    const { data: matchId, error } = await supabase.rpc('create_match_session', {
+    const { data, error } = await supabase.rpc('create_match_session', {
       p_player1_id: profile.id,
       p_player2_id: player.id,
       p_target_score: settings.targetScore,
     });
 
+    const matchId = data as unknown as string;
     if (matchId && !error) {
       setLiveMatchId(matchId);
       setPage('match');
@@ -109,12 +110,13 @@ export default function Index() {
 
     debugMatchEvent('fresh rematch created', { playerOneId, playerTwoId, targetScore });
 
-    const { data: matchId, error } = await supabase.rpc('create_match_session', {
+    const { data, error } = await supabase.rpc('create_match_session', {
       p_player1_id: playerOneId,
       p_player2_id: playerTwoId,
       p_target_score: targetScore,
     });
 
+    const matchId = data as unknown as string;
     if (matchId && !error) {
       setLiveMatchId(matchId);
       setPage('match');

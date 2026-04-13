@@ -229,6 +229,14 @@ export type Database = {
         Args: { p_profile_id?: string }
         Returns: number
       }
+      create_match_session: {
+        Args: {
+          p_player1_id: string
+          p_player2_id: string
+          p_target_score?: number
+        }
+        Returns: string
+      }
       finalize_match_session: {
         Args: {
           p_closed_by_profile_id?: string
