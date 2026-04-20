@@ -249,11 +249,13 @@ export default function ScoreBoard({ matchId, currentProfileId, lang, soundEnabl
 
       if (soundEnabled) playWin();
 
-      const duration = 2500;
+      const isMobile = navigator.maxTouchPoints > 0;
+      const duration = isMobile ? 1500 : 2500;
+      const particleCount = isMobile ? 1 : 3;
       const end = Date.now() + duration;
       const frame = () => {
-        confetti({ particleCount: 3, angle: 60, spread: 55, origin: { x: 0, y: 0.7 }, colors: ['#22c55e', '#facc15', '#f97316'] });
-        confetti({ particleCount: 3, angle: 120, spread: 55, origin: { x: 1, y: 0.7 }, colors: ['#22c55e', '#facc15', '#f97316'] });
+        confetti({ particleCount, angle: 60, spread: 55, origin: { x: 0, y: 0.7 }, colors: ['#22c55e', '#facc15', '#f97316'] });
+        confetti({ particleCount, angle: 120, spread: 55, origin: { x: 1, y: 0.7 }, colors: ['#22c55e', '#facc15', '#f97316'] });
         if (Date.now() < end) requestAnimationFrame(frame);
       };
       frame();

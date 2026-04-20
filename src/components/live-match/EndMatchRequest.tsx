@@ -29,7 +29,7 @@ export default function EndMatchRequest({ requesterName, lang, onAccept, onDecli
         window.clearInterval(timer);
         onTimeout();
       }
-    }, 250);
+    }, 500);
 
     return () => window.clearInterval(timer);
   }, [onTimeout, requesterName]);

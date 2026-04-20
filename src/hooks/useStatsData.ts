@@ -228,17 +228,20 @@ export function useStatsData() {
   }, [filteredMatches]);
 
   const deleteMatch = useCallback(async (matchId: string) => {
-    await supabase.rpc('delete_match_and_recalculate', { p_match_id: matchId });
+    const { error } = await supabase.rpc('delete_match_and_recalculate', { p_match_id: matchId });
+    if (error) throw error;
     await fetchData();
   }, [fetchData]);
 
   const deletePlayerMatches = useCallback(async (profileId: string) => {
-    await supabase.rpc('delete_player_matches', { p_profile_id: profileId });
+    const { error } = await supabase.rpc('delete_player_matches', { p_profile_id: profileId });
+    if (error) throw error;
     await fetchData();
   }, [fetchData]);
 
   const resetAllStats = useCallback(async () => {
-    await supabase.rpc('reset_all_stats');
+    const { error } = await supabase.rpc('reset_all_stats');
+    if (error) throw error;
     await fetchData();
   }, [fetchData]);
 

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { type MatchRecord, type PlayerProfile } from '@/hooks/useStatsData';
 import { Trash2 } from 'lucide-react';
 import {
@@ -40,6 +41,8 @@ export default function MatchHistory({ matches, profiles, onDeleteMatch, onDelet
       } else if (confirmAction.type === 'all') {
         await onResetAll();
       }
+    } catch {
+      toast.error('Failed to delete. Please try again.');
     } finally {
       setDeleting(false);
       setConfirmAction(null);

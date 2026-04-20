@@ -172,6 +172,21 @@ export function useRealtimeMatch(matchId: string | null, currentProfileId?: stri
     return () => subscription.unsubscribe();
   }, []);
 
+  const fetchMatch = useCallback(async () => {
+    if (!matchId) return;
+    debugMatchEvent('live session fetch started', { matchId });
+    const { data, error } = await supabase
+      .from('matches')
+      .select('*')
+      .eq('id', matchId)
+      .maybeSingle();
+    if (error) {
+      console.error('Failed to fetch live match session', error);
+    }
+    await applyMatchRow(data ?? null);
+    setLoading(false);
+  }, [applyMatchRow, matchId]);
+
   useEffect(() => {
     if (!matchId) {
       setLoading(false);
@@ -180,26 +195,19 @@ export function useRealtimeMatch(matchId: string | null, currentProfileId?: stri
     }
 
     setLoading(true);
-
-    const fetchMatch = async () => {
-      debugMatchEvent('live session fetch started', { matchId });
-
-      const { data, error } = await supabase
-        .from('matches')
-        .select('*')
-        .eq('id', matchId)
-        .maybeSingle();
-
-      if (error) {
-        console.error('Failed to fetch live match session', error);
-      }
-
-      await applyMatchRow(data ?? null);
-      setLoading(false);
-    };
-
     void fetchMatch();
-  }, [applyMatchRow, matchId]);
+  }, [applyMatchRow, fetchMatch, matchId]);
+
+  useEffect(() => {
+    if (!matchId) return;
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void fetchMatch();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [fetchMatch, matchId]);
 
   useEffect(() => {
     if (!matchId) return;
@@ -233,7 +241,10 @@ export function useRealtimeMatch(matchId: string | null, currentProfileId?: stri
   useEffect(() => {
     if (!matchId || !currentProfileId) return;
 
-    const cancelOnPageHide = () => {
+    const cancelOnPageHide = (event: PageTransitionEvent) => {
+      // Don't cancel if the page is being stored in the BFCache — it will be restored.
+      if (event.persisted) return;
+
       const currentMatch = matchRef.current;
 
       if (!currentMatch || currentMatch.status !== 'active' || !authTokenRef.current) {
