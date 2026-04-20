@@ -116,8 +116,7 @@ export function useDeletionRequests(profileId: string | undefined) {
       .eq('status', 'pending');
 
     if (updateError) {
-      console.error('Failed to accept deletion request', updateError);
-      return false;
+      throw new Error(`Status update failed: ${updateError.message ?? updateError.code ?? JSON.stringify(updateError)}`);
     }
 
     // Delete match and recalculate stats for both players
@@ -126,14 +125,13 @@ export function useDeletionRequests(profileId: string | undefined) {
     });
 
     if (deleteError) {
-      console.error('Failed to delete match', deleteError);
       // Revert acceptance so the request stays visible
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabase as any)
         .from('deletion_requests')
         .update({ status: 'pending', responded_at: null })
         .eq('id', requestId);
-      return false;
+      throw new Error(`Delete failed: ${deleteError.message ?? deleteError.code ?? JSON.stringify(deleteError)}`);
     }
 
     return true;

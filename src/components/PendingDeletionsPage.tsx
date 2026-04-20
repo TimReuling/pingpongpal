@@ -22,8 +22,10 @@ export default function PendingDeletionsPage({ currentProfileId, onBack }: Props
     try {
       const ok = await respondToRequest(requestId, accept, matchId);
       if (ok) toast.success('Match deleted — stats updated for both players');
-      else if (!accept) toast.success('Deletion request declined');
-      else toast.error('Failed to process request. Please try again.');
+      else toast.success('Deletion request declined');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      toast.error(msg);
     } finally {
       setWorking(requestId, false);
     }
