@@ -17,10 +17,10 @@ export default function PendingDeletionsPage({ currentProfileId, onBack }: Props
   const setWorking = (id: string, on: boolean) =>
     setProcessing(prev => { const s = new Set(prev); on ? s.add(id) : s.delete(id); return s; });
 
-  const handleRespond = async (requestId: string, accept: boolean) => {
+  const handleRespond = async (requestId: string, accept: boolean, matchId: string) => {
     setWorking(requestId, true);
     try {
-      const ok = await respondToRequest(requestId, accept);
+      const ok = await respondToRequest(requestId, accept, matchId);
       if (ok) toast.success('Match deleted — stats updated for both players');
       else if (!accept) toast.success('Deletion request declined');
       else toast.error('Failed to process request. Please try again.');
@@ -76,8 +76,8 @@ export default function PendingDeletionsPage({ currentProfileId, onBack }: Props
                   req={req}
                   mode="incoming"
                   busy={processing.has(req.id)}
-                  onAccept={() => handleRespond(req.id, true)}
-                  onDecline={() => handleRespond(req.id, false)}
+                  onAccept={() => handleRespond(req.id, true, req.match_id)}
+                  onDecline={() => handleRespond(req.id, false, req.match_id)}
                 />
               ))}
             </section>

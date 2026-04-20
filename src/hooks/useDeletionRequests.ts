@@ -97,19 +97,46 @@ export function useDeletionRequests(profileId: string | undefined) {
     return data === null ? 'direct' : 'requested';
   }, [profileId]);
 
-  const respondToRequest = useCallback(async (requestId: string, accept: boolean): Promise<boolean> => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error } = await (supabase as any).rpc('respond_to_deletion_request', {
-      p_request_id: requestId,
-      p_accept: accept,
-    });
-
-    if (error) {
-      console.error('Failed to respond to deletion request', error);
+  const respondToRequest = useCallback(async (requestId: string, accept: boolean, matchId: string): Promise<boolean> => {
+    if (!accept) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from('deletion_requests')
+        .update({ status: 'declined', responded_at: new Date().toISOString() })
+        .eq('id', requestId);
       return false;
     }
 
-    return !!data;
+    // Mark accepted first so the request disappears from the list
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: updateError } = await (supabase as any)
+      .from('deletion_requests')
+      .update({ status: 'accepted', responded_at: new Date().toISOString() })
+      .eq('id', requestId)
+      .eq('status', 'pending');
+
+    if (updateError) {
+      console.error('Failed to accept deletion request', updateError);
+      return false;
+    }
+
+    // Delete match and recalculate stats for both players
+    const { error: deleteError } = await supabase.rpc('delete_match_and_recalculate', {
+      p_match_id: matchId,
+    });
+
+    if (deleteError) {
+      console.error('Failed to delete match', deleteError);
+      // Revert acceptance so the request stays visible
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from('deletion_requests')
+        .update({ status: 'pending', responded_at: null })
+        .eq('id', requestId);
+      return false;
+    }
+
+    return true;
   }, []);
 
   const cancelRequest = useCallback(async (requestId: string): Promise<void> => {
