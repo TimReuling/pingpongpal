@@ -12,15 +12,15 @@ export function useAuth() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setUser(session?.user ?? null);
       if (session?.user) {
-        setTimeout(async () => {
-          const { data } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('user_id', session.user.id)
-            .single();
-          setProfile(data);
-          setLoading(false);
-        }, 500);
+        supabase
+          .from('profiles')
+          .select('*')
+          .eq('user_id', session.user.id)
+          .single()
+          .then(({ data }) => {
+            setProfile(data);
+            setLoading(false);
+          });
       } else {
         setProfile(null);
         setLoading(false);
