@@ -90,6 +90,18 @@ export function useStatsData() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // Auto-refetch whenever any match is deleted (e.g. via the consent flow)
+  // so leaderboards, charts, and compare stats stay in sync across all tabs.
+  useEffect(() => {
+    const channel = supabase
+      .channel('stats-match-delete-sync')
+      .on('postgres_changes' as any, { event: 'DELETE', schema: 'public', table: 'matches' }, () => {
+        void fetchData();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [fetchData]);
+
   const filteredMatches = useMemo(() => {
     const cutoff = getFilterDate(timeFilter);
     if (!cutoff) return matches;

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useStatsData } from '@/hooks/useStatsData';
+import { useDeletionRequests } from '@/hooks/useDeletionRequests';
 import { t, type Lang } from '@/lib/i18n';
 import TimeFilterBar from '@/components/stats/TimeFilterBar';
 import InsightCards from '@/components/stats/InsightCards';
@@ -12,7 +13,9 @@ type Tab = 'overview' | 'charts' | 'compare' | 'history';
 
 interface StatsPageProps {
   lang: Lang;
+  currentProfileId: string;
   onBack: () => void;
+  onOpenPendingDeletions: () => void;
 }
 
 const tabs: { key: Tab; label: string }[] = [
@@ -22,11 +25,14 @@ const tabs: { key: Tab; label: string }[] = [
   { key: 'history', label: 'History' },
 ];
 
-export default function StatsPage({ lang, onBack }: StatsPageProps) {
+export default function StatsPage({ lang, currentProfileId, onBack, onOpenPendingDeletions }: StatsPageProps) {
   const {
     matches, profiles, loading, timeFilter, setTimeFilter,
-    insights, getHeadToHead, deleteMatch, deletePlayerMatches, resetAllStats,
+    insights, getHeadToHead, deletePlayerMatches, resetAllStats,
   } = useStatsData();
+  const { incoming, outgoing, requestDeletion } = useDeletionRequests(currentProfileId);
+  const outgoingMatchIds = new Set(outgoing.map(r => r.match_id));
+  const incomingMatchIds = new Set(incoming.map(r => r.match_id));
   const [tab, setTab] = useState<Tab>('overview');
 
   return (
@@ -94,9 +100,13 @@ export default function StatsPage({ lang, onBack }: StatsPageProps) {
                   <MatchHistory
                     matches={matches}
                     profiles={profiles}
-                    onDeleteMatch={deleteMatch}
+                    currentProfileId={currentProfileId}
+                    outgoingMatchIds={outgoingMatchIds}
+                    incomingMatchIds={incomingMatchIds}
+                    onRequestDeletion={requestDeletion}
                     onDeletePlayerMatches={deletePlayerMatches}
                     onResetAll={resetAllStats}
+                    onOpenPendingDeletions={onOpenPendingDeletions}
                   />
                 </section>
               )}

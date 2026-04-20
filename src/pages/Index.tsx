@@ -10,6 +10,7 @@ import LoginScreen from '@/components/LoginScreen';
 import OpponentSelect from '@/components/OpponentSelect';
 import ScoreBoard from '@/components/ScoreBoard';
 import StatsPage from '@/components/StatsPage';
+import PendingDeletionsPage from '@/components/PendingDeletionsPage';
 import SettingsPage from '@/components/SettingsPage';
 import ProfilePage from '@/components/ProfilePage';
 import { supabase } from '@/integrations/supabase/client';
@@ -17,7 +18,7 @@ import type { Tables } from '@/integrations/supabase/types';
 import { toast } from 'sonner';
 import { t } from '@/lib/i18n';
 
-type Page = 'select' | 'match' | 'stats' | 'settings' | 'profile';
+type Page = 'select' | 'match' | 'stats' | 'settings' | 'profile' | 'deletions';
 
 export default function Index() {
   const { user, profile, loading, signOut, setProfile } = useAuth();
@@ -169,8 +170,25 @@ export default function Index() {
     );
   }
 
+  if (page === 'deletions') {
+    return (
+      <PendingDeletionsPage
+        currentProfileId={profile.id}
+        lang={settings.language}
+        onBack={() => setPage('stats')}
+      />
+    );
+  }
+
   if (page === 'stats') {
-    return <StatsPage lang={settings.language} onBack={() => setPage(liveMatchId ? 'match' : 'select')} />;
+    return (
+      <StatsPage
+        lang={settings.language}
+        currentProfileId={profile.id}
+        onBack={() => setPage(liveMatchId ? 'match' : 'select')}
+        onOpenPendingDeletions={() => setPage('deletions')}
+      />
+    );
   }
 
   if (page === 'settings') {
