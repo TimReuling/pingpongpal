@@ -14,6 +14,58 @@ export type Database = {
   }
   public: {
     Tables: {
+      deletion_requests: {
+        Row: {
+          created_at: string
+          from_profile_id: string
+          id: string
+          match_id: string
+          responded_at: string | null
+          status: string
+          to_profile_id: string
+        }
+        Insert: {
+          created_at?: string
+          from_profile_id: string
+          id?: string
+          match_id: string
+          responded_at?: string | null
+          status?: string
+          to_profile_id: string
+        }
+        Update: {
+          created_at?: string
+          from_profile_id?: string
+          id?: string
+          match_id?: string
+          responded_at?: string | null
+          status?: string
+          to_profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deletion_requests_from_profile_id_fkey"
+            columns: ["from_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deletion_requests_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deletion_requests_to_profile_id_fkey"
+            columns: ["to_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       match_requests: {
         Row: {
           created_at: string
@@ -262,7 +314,15 @@ export type Database = {
         Args: { p_profile_id: string }
         Returns: undefined
       }
+      request_match_deletion: {
+        Args: { p_match_id: string; p_requesting_profile_id: string }
+        Returns: string
+      }
       reset_all_stats: { Args: never; Returns: undefined }
+      respond_to_deletion_request: {
+        Args: { p_accept: boolean; p_request_id: string }
+        Returns: boolean
+      }
       update_match_score: {
         Args: { p_delta: number; p_match_id: string; p_player: number }
         Returns: {
