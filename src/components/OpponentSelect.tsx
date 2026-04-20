@@ -16,12 +16,15 @@ interface OpponentSelectProps {
   onDeclineRequest: (requestId: string) => void;
   onSendChallenge: (player: Tables<'profiles'>) => void;
   currentProfile: Tables<'profiles'> | null;
+  incomingDeletionCount?: number;
+  onOpenPendingDeletions?: () => void;
 }
 
 export default function OpponentSelect({
   players, currentProfileId, onSelect, onAddGuest, lang,
   onNavigate, incomingRequests, onAcceptRequest, onDeclineRequest,
   onSendChallenge, currentProfile,
+  incomingDeletionCount = 0, onOpenPendingDeletions,
 }: OpponentSelectProps) {
   const [guestName, setGuestName] = useState('');
   const [showGuestInput, setShowGuestInput] = useState(false);
@@ -64,9 +67,14 @@ export default function OpponentSelect({
           )}
           <button
             onClick={() => onNavigate('stats')}
-            className="rounded-xl bg-primary-foreground/10 px-3 py-2 text-sm font-semibold text-primary-foreground active:scale-95"
+            className="relative rounded-xl bg-primary-foreground/10 px-3 py-2 text-sm font-semibold text-primary-foreground active:scale-95"
           >
             📊
+            {incomingDeletionCount > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-white">
+                {incomingDeletionCount}
+              </span>
+            )}
           </button>
           <button
             onClick={() => onNavigate('settings')}
@@ -87,6 +95,22 @@ export default function OpponentSelect({
             onAccept={onAcceptRequest}
             onDecline={onDeclineRequest}
           />
+
+          {/* Pending deletion approvals */}
+          {incomingDeletionCount > 0 && onOpenPendingDeletions && (
+            <button
+              onClick={onOpenPendingDeletions}
+              className="flex items-center gap-3 rounded-2xl border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-left active:scale-95"
+            >
+              <span className="text-lg">🗑️</span>
+              <span className="flex-1 text-sm font-semibold text-amber-700 dark:text-amber-400">
+                {incomingDeletionCount === 1
+                  ? '1 match deletion awaiting your approval'
+                  : `${incomingDeletionCount} match deletions awaiting your approval`}
+              </span>
+              <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">View →</span>
+            </button>
+          )}
 
           {/* Search */}
           <input

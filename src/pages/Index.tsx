@@ -5,6 +5,7 @@ import { usePlayers } from '@/hooks/usePlayers';
 import { useMatchRequests, type MatchRequest } from '@/hooks/useMatchRequests';
 import { usePlayerStats } from '@/hooks/usePlayerStats';
 import { useActiveMatch } from '@/hooks/useActiveMatch';
+import { useDeletionRequests } from '@/hooks/useDeletionRequests';
 import { debugMatchEvent } from '@/lib/matchSession';
 import LoginScreen from '@/components/LoginScreen';
 import OpponentSelect from '@/components/OpponentSelect';
@@ -27,6 +28,7 @@ export default function Index() {
   const { incoming, sendRequest, respondToRequest } = useMatchRequests(profile?.id);
   const { stats } = usePlayerStats();
   const { activeMatchId, recheck: recheckActive, clearActiveMatch } = useActiveMatch(profile?.id);
+  const { incoming: incomingDeletions } = useDeletionRequests(profile?.id);
   const [page, setPage] = useState<Page>('select');
   const [liveMatchId, setLiveMatchId] = useState<string | null>(null);
   // Tracks the match ID we most recently intentionally exited so the routing
@@ -235,6 +237,8 @@ export default function Index() {
       onDeclineRequest={handleDeclineRequest}
       onSendChallenge={handleSendChallenge}
       currentProfile={profile}
+      incomingDeletionCount={incomingDeletions.length}
+      onOpenPendingDeletions={() => setPage('deletions')}
     />
   );
 }
