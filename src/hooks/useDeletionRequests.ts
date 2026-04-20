@@ -119,6 +119,10 @@ export function useDeletionRequests(profileId: string | undefined) {
       throw new Error(`Status update failed: ${updateError.message ?? updateError.code ?? JSON.stringify(updateError)}`);
     }
 
+    // Remove match_requests rows first (FK constraint blocks match deletion)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any).from('match_requests').delete().eq('match_id', matchId);
+
     // Delete match and recalculate stats for both players
     const { error: deleteError } = await supabase.rpc('delete_match_and_recalculate', {
       p_match_id: matchId,
